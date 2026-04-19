@@ -27,8 +27,6 @@
 
 Meta の **SAM 3D Body** と **Momentum Human Rig (MHR)** がバンドルされており、それぞれのオリジナルライセンスに従います (詳細は [License](#license))。
 
-![body](docs/body.png)
-
 ## Installation
 
 ### 前提環境

@@ -27,8 +27,6 @@ Write the same posed character out as a rigged FBX — **armature + skinned mesh
 
 Based on Meta's **SAM 3D Body** + **Momentum Human Rig (MHR)**; both libraries are vendored under their original licenses. See the [License](#license) section.
 
-![body](docs/body.png)
-
 ## Installation
 
 ### Prerequisites
