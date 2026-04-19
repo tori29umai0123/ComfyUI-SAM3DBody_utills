@@ -1,8 +1,24 @@
-# ComfyUI-SAM3DBody (utility fork)
+# ComfyUI-SAM3DBody_utills
 
 **Language:** [🇯🇵 日本語](README.md) ・ 🇬🇧 English (current)
 
-A streamlined fork of **[ComfyUI-SAM3DBody](https://github.com/PozzettiAndrea/ComfyUI-SAM3DBody)** focused on turning a single pose image into a reusable, rigged, posable 3D character inside ComfyUI. Four nodes:
+A streamlined fork of **[PozzettiAndrea/ComfyUI-SAM3DBody](https://github.com/PozzettiAndrea/ComfyUI-SAM3DBody)** focused on turning a single pose image into a reusable, rigged, posable 3D character inside ComfyUI.
+
+## What this plugin does
+
+### 1. Render a custom-body 3D model in the pose of any input image
+
+Extract the pose from any character image, then render it onto a 3D character body whose shape you control yourself (height, thickness, face shape, bone lengths, ...).
+
+![sample1](docs/sample1.png)
+
+### 2. Export a rigged, animated FBX
+
+Write the same posed character out as a rigged FBX — **armature + skinned mesh + pose animation** — straight into `<ComfyUI>/output/`. Drop it into Blender / Unity / Unreal Engine as-is. (This one feature needs Blender installed.)
+
+![sample2](docs/sample2.png)
+
+## The four nodes
 
 1. **Load SAM 3D Body Model** — lazy-loads the checkpoint from `<ComfyUI>/models/sam3dbody/`.
 2. **SAM 3D Body: Process Image to Pose JSON** — runs SAM 3D Body on the input image and emits the pose as JSON.
@@ -161,6 +177,12 @@ See [LICENSE](docs/licenses/LICENSE) and [THIRD_PARTY_NOTICES](docs/licenses/THI
 - ⚠ Contracted blend-shape authoring against the MHR topology: the contractor's output is a derivative work under Apache 2.0 — keep the MHR attribution
 - ⚠ Acknowledge SAM 3D Body in publications (required by the SAM License)
 
+## Community
+
+For issues and feature requests specific to this fork, use the [tori29umai0123/ComfyUI-SAM3DBody_utills](https://github.com/tori29umai0123/ComfyUI-SAM3DBody_utills) repo (Issues / Discussions).
+
+For SAM 3D Body / MHR core topics and upstream plugin chat, see the [PozzettiAndrea/ComfyUI-SAM3DBody Discussions](https://github.com/PozzettiAndrea/ComfyUI-SAM3DBody/discussions) and the [Comfy3D Discord](https://discord.gg/bcdQCUjnHE).
+
 ## Example workflows
 
 Three ready-made workflows ship under `workflows/`. Load them from ComfyUI's `Workflow → Open` menu. The bundled `workflows/input_image*.png` / `workflows/input_mask*.png` work as drop-in test inputs.
@@ -170,6 +192,16 @@ Three ready-made workflows ship under `workflows/`. Load them from ComfyUI's `Wo
 | **`SAM3Dbody_image.json`** | Minimal image-rendering workflow. Takes the pose from your input image and renders it onto an arbitrary body shape. | ❌ |
 | **`SAM3Dbody_FBX.json`** | FBX export workflow. Takes the pose from your input image, applies it to an arbitrary body shape, and exports a rigged FBX with a posed animation track — importable into Unity / Unreal Engine. | ✅ |
 | **`SAM3Dbody _QIE_VNCCSpose.json`** | A real-world usage example. Combines [Qwen-Image-Edit-2511](https://huggingface.co/Qwen/Qwen-Image-Edit) + the VNCCSpose LoRA: extract the pose from a reference character of a different body shape, render it onto an arbitrary 3D character body, then image-edit the result. | ❌ |
+
+### How `SAM3Dbody _QIE_VNCCSpose.json` fits together
+
+![sample3](docs/sample3.png)
+
+- **Left two panels** — inputs (a reference character for the pose + a different character for the target body shape)
+- **Middle panel** — intermediate output (the 3D character body, posed by this plugin, that matches the target body shape)
+- **Right panel** — final output (the middle panel handed to an image-editing model and composed into the finished art)
+
+The intended use is treating this plugin's render as an **intermediate artifact fed into an image-editing model** (here Qwen-Image-Edit). It lets you merge two separate inputs — "pose from character A, body type from character B" — via a geometrically correct 3D body in the middle.
 
 ## Render Human From Pose JSON Debug — parameter reference
 

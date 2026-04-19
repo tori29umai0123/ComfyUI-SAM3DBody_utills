@@ -1,19 +1,33 @@
-# ComfyUI-SAM3DBody
+# ComfyUI-SAM3DBody_utills
 
 **Language:** 🇯🇵 日本語 (current) ・ [🇬🇧 English](README.en.md)
 
-**[View Workflow Gallery](https://pozzettiandrea.github.io/ComfyUI-SAM3DBody/)**
+[PozzettiAndrea/ComfyUI-SAM3DBody](https://github.com/PozzettiAndrea/ComfyUI-SAM3DBody) をベースにした、**「1 枚の画像からリグ付き 3D キャラクターを作る」** ことに焦点を絞った utility fork。
 
-ComfyUI wrapper for Meta's SAM 3D Body - single-image full-body 3D human mesh recovery.
+## このプラグインでできること
+
+### 1. 入力画像のポーズを、任意の体形の 3D モデルでレンダリング
+
+入力したキャラクター画像からポーズだけを抽出し、自分で設定した体形 (身長・太さ・顔の形・骨の長さ…) の 3D 素体に当てはめてレンダリングします。
+
+![sample1](docs/sample1.png)
+
+### 2. リギング済みアニメーション FBX として書き出し
+
+同じポーズ + 体形のキャラクターを、**アーマチュア + スキニング済みメッシュ + ポーズアニメ**を含む FBX として `<ComfyUI>/output/` に出力できます。そのまま Blender / Unity / Unreal Engine で読み込めます (※ この機能のみ Blender のインストールが必要)。
+
+![sample2](docs/sample2.png)
+
+## 含まれるノード (4 つ)
+
+1. **Load SAM 3D Body Model** — `<ComfyUI>/models/sam3dbody/` からモデル重みを遅延ロード
+2. **SAM 3D Body: Process Image to Pose JSON** — SAM 3D Body で入力画像を解析し、ポーズを JSON として出力
+3. **SAM 3D Body: Render Human From Pose JSON Debug** — 推定ポーズを MHR 素体にあてて、体形 / ボーン長 / ブレンドシェイプを全スライダー制御できる状態でレンダリング
+4. **SAM 3D Body: Export Rigged FBX** — アーマチュア + スキニング済みメッシュ + ポーズアニメ付きの FBX を `<ComfyUI>/output/` に書き出す (Blender 必須)
+
+Meta の **SAM 3D Body** と **Momentum Human Rig (MHR)** がバンドルされており、それぞれのオリジナルライセンスに従います (詳細は [License](#license))。
 
 ![body](docs/body.png)
-
-
-https://github.com/user-attachments/assets/5b6c0e24-5c64-4413-b4b5-e8b244c51cae
-
-https://github.com/user-attachments/assets/8429690a-a251-458f-8b4f-aad5e723525e
-
-https://github.com/user-attachments/assets/2906d9b5-bdf7-4593-a3ae-1f2c866d2b2e
 
 ## Installation
 
@@ -185,9 +199,9 @@ See [LICENSE](docs/licenses/LICENSE) for complete license information and [THIRD
 
 ## Community
 
-Questions or feature requests? Open a [Discussion](https://github.com/PozzettiAndrea/ComfyUI-SAM3DBody/discussions) on GitHub.
+この fork に関する質問・機能要望は [tori29umai0123/ComfyUI-SAM3DBody_utills の Issues / Discussions](https://github.com/tori29umai0123/ComfyUI-SAM3DBody_utills) へ。
 
-Join the [Comfy3D Discord](https://discord.gg/bcdQCUjnHE) for help, updates, and chat about 3D workflows in ComfyUI.
+SAM 3D Body / MHR 本体や upstream の話題は [PozzettiAndrea/ComfyUI-SAM3DBody の Discussions](https://github.com/PozzettiAndrea/ComfyUI-SAM3DBody/discussions) および [Comfy3D Discord](https://discord.gg/bcdQCUjnHE) が参考になります。
 
 ## 同梱ワークフロー例
 
@@ -198,6 +212,16 @@ Join the [Comfy3D Discord](https://discord.gg/bcdQCUjnHE) for help, updates, and
 | **`SAM3Dbody_image.json`** | シンプルな画像レンダリングワークフロー。入力した画像のポーズを、任意の体形でレンダリングする構成 | ❌ |
 | **`SAM3Dbody_FBX.json`** | FBX 出力ワークフロー。入力した画像のポーズを任意の体形に適用し、アニメーション付き FBX として書き出す (Unity / Unreal Engine などで読み込み可能) | ✅ |
 | **`SAM3Dbody _QIE_VNCCSpose.json`** | 実際の使用例ワークフロー。[Qwen-Image-Edit-2511](https://huggingface.co/Qwen/Qwen-Image-Edit) と VNCCSpose LoRA を組み合わせて、体形違いのキャラクター画像からポーズを抽出し、任意の体形の 3D 素体でレンダリングした結果を元に画像編集を行う | ❌ |
+
+### `SAM3Dbody _QIE_VNCCSpose.json` の使い方
+
+![sample3](docs/sample3.png)
+
+- **左 2 つ** が入力 (ポーズ参照となるキャラクター画像 + 差し替えたい体形のキャラクター画像)
+- **真ん中** が経過ファイル (このプラグインがレンダした、目的の体形 + 入力ポーズの 3D 素体画像)
+- **一番右** が最終出力 (真ん中の 3D 素体レンダを画像編集モデルに渡して仕上げた結果)
+
+このプラグインの出力画像を、**Qwen-Image-Edit のような画像編集モデルに渡す中間出力物**として使う運用を想定したワークフローです。「ポーズは参照キャラから、体形は別キャラから」という 2 系統の入力を、ポーズ正確な 3D 素体を経由してマージできます。
 
 ## Render Human From Pose JSON Debug ノード パラメータ説明
 
