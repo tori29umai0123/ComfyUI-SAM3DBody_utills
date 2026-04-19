@@ -50,7 +50,32 @@ def _normalize_shape_name(raw: str) -> str:
 HERE = Path(__file__).resolve().parent
 NODE_ROOT = HERE.parent
 FBX_PATH = HERE / "bone_backup" / "all_parts_bs.fbx"
-OUT_PATH = NODE_ROOT / "presets" / "face_blendshapes.npz"
+
+
+def _resolve_active_pack_dir() -> Path:
+    """Read active_preset.ini to find the active preset pack. Blender's
+    bundled Python can't import our `nodes.preset_pack` module (no
+    package context when called via --python), so we re-parse the ini
+    here with only stdlib."""
+    import configparser
+    ini = NODE_ROOT / "active_preset.ini"
+    name = "default"
+    if ini.exists():
+        try:
+            cp = configparser.ConfigParser()
+            cp.read(ini, encoding="utf-8")
+            name = cp.get("active", "pack", fallback="default").strip() or "default"
+        except Exception as exc:
+            print(f"[extract_face_blendshapes] active_preset.ini parse "
+                  f"failed: {exc}; using 'default'")
+    pack_dir = NODE_ROOT / "presets" / name
+    if not pack_dir.is_dir():
+        pack_dir = NODE_ROOT / "presets" / "default"
+        pack_dir.mkdir(parents=True, exist_ok=True)
+    return pack_dir
+
+
+OUT_PATH = _resolve_active_pack_dir() / "face_blendshapes.npz"
 
 # No hardcoded list — every non-Basis shape key on any mesh object is exported.
 

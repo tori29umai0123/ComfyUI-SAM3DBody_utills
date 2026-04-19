@@ -11,20 +11,23 @@ import json
 from aiohttp import web
 from server import PromptServer
 
+from .preset_pack import chara_settings_dir
+
 
 routes = PromptServer.instance.routes
 
-_CHARA_DIR = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-    'chara_settings_presets',
-)
+
+def _chara_dir() -> str:
+    """Resolved lazily so edits to active_preset.ini take effect on the
+    next HTTP request, no server restart needed."""
+    return str(chara_settings_dir())
 
 
 @routes.get('/sam3d/autosave')
 async def get_autosave(request):
-    """Return the contents of chara_settings_presets/autosave.json, or
-    an empty object if the file is missing / unreadable."""
-    path = os.path.join(_CHARA_DIR, 'autosave.json')
+    """Return the contents of the active pack's chara_settings_presets/
+    autosave.json, or an empty object if the file is missing / unreadable."""
+    path = os.path.join(_chara_dir(), 'autosave.json')
     if not os.path.exists(path):
         return web.json_response({})
     try:
@@ -44,7 +47,7 @@ async def get_preset(request):
     name = request.match_info.get('name', '')
     if not name or '/' in name or '\\' in name or '..' in name:
         return web.json_response({'error': 'invalid preset name'}, status=400)
-    path = os.path.join(_CHARA_DIR, f'{name}.json')
+    path = os.path.join(_chara_dir(), f'{name}.json')
     if not os.path.isfile(path):
         return web.json_response({'error': 'not found'}, status=404)
     try:

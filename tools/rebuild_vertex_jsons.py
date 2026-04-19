@@ -32,10 +32,29 @@ sys.path.insert(0, str(COMFYUI_ROOT))
 sys.path.insert(0, str(NODE_ROOT))
 
 
+def _active_pack_dir() -> Path:
+    """Read active_preset.ini (stdlib only) to find the active pack."""
+    import configparser
+    ini = NODE_ROOT / "active_preset.ini"
+    name = "default"
+    if ini.exists():
+        try:
+            cp = configparser.ConfigParser()
+            cp.read(ini, encoding="utf-8")
+            name = cp.get("active", "pack", fallback="default").strip() or "default"
+        except Exception:
+            pass
+    pack_dir = NODE_ROOT / "presets" / name
+    if not pack_dir.is_dir():
+        pack_dir = NODE_ROOT / "presets" / "default"
+    return pack_dir
+
+
 def main():
+    pack_dir = _active_pack_dir()
     ap = argparse.ArgumentParser()
-    ap.add_argument("--npz", default=str(NODE_ROOT / "presets" / "face_blendshapes.npz"))
-    ap.add_argument("--out", default=str(NODE_ROOT / "presets"))
+    ap.add_argument("--npz", default=str(pack_dir / "face_blendshapes.npz"))
+    ap.add_argument("--out", default=str(pack_dir))
     ap.add_argument("--ckpt", default="C:/ComfyUI/models/sam3dbody/model.ckpt")
     ap.add_argument("--mhr",  default="C:/ComfyUI/models/sam3dbody/assets/mhr_model.pt")
     ap.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")

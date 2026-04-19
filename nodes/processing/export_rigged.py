@@ -227,7 +227,8 @@ class SAM3DBodyExportRiggedFBX:
         # (add deltas in rest frame).
         bs_sliders = {str(k): float(v) for k, v in bs.items()}
         if any(v != 0.0 for v in bs_sliders.values()):
-            presets_dir = os.path.join(_UTILS_ROOT, "presets")
+            from ..preset_pack import active_pack_dir as _pack_dir
+            presets_dir = str(_pack_dir())
             bs_npz = os.path.join(presets_dir, "face_blendshapes.npz")
             mhr_neutral_rest = _FACE_BS_CACHE["rest_verts"]
             char_rest_verts = _apply_face_blendshapes(

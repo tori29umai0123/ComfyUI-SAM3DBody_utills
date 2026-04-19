@@ -42,10 +42,10 @@ _MODEL_CACHE = {}
 
 
 def _character_presets_dir():
-    return os.path.join(
-        os.path.dirname(os.path.abspath(__file__)),
-        "..", "..", "chara_settings_presets",
-    )
+    """Resolves to `presets/<active pack>/chara_settings_presets/` —
+    controlled by active_preset.ini at the repo root."""
+    from ..preset_pack import chara_settings_dir
+    return str(chara_settings_dir())
 
 
 def _discover_character_presets():
@@ -148,10 +148,8 @@ def _discover_blendshape_names():
     found in the npz are appended alphabetically so new shape keys
     surface in the UI without code changes.
     """
-    npz_path = os.path.join(
-        os.path.dirname(os.path.abspath(__file__)),
-        "..", "..", "presets", "face_blendshapes.npz",
-    )
+    from ..preset_pack import npz_path as _pack_npz_path
+    npz_path = str(_pack_npz_path())
     shapes = ()
     if not os.path.exists(npz_path):
         return _UI_BLENDSHAPE_ORDER
@@ -1375,10 +1373,8 @@ class SAM3DBodyRenderFromJsonDebug:
         # Face / neck blend-shapes (FBX-derived morph targets). Shapes may
         # span multiple FBX objects (e.g. neck_lengthen on head+neck+chest);
         # each object's delta is applied to its corresponding MHR region.
-        presets_dir = os.path.join(
-            os.path.dirname(os.path.abspath(__file__)),
-            "..", "..", "presets",
-        )
+        from ..preset_pack import active_pack_dir as _pack_dir
+        presets_dir = str(_pack_dir())
         bs_npz_path = os.path.join(presets_dir, "face_blendshapes.npz")
         bs_sliders = {k: float(v) for k, v in blendshape_sliders.items()}
         if any(v != 0.0 for v in bs_sliders.values()):

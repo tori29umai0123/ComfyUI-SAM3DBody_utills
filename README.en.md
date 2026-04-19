@@ -183,6 +183,55 @@ For issues and feature requests specific to this fork, use the [tori29umai0123/C
 
 For SAM 3D Body / MHR core topics and upstream plugin chat, see the [PozzettiAndrea/ComfyUI-SAM3DBody Discussions](https://github.com/PozzettiAndrea/ComfyUI-SAM3DBody/discussions) and the [Comfy3D Discord](https://discord.gg/bcdQCUjnHE).
 
+## Preset packs (distributable blend-shape definitions)
+
+This plugin bundles its blend-shape definitions, vertex mapping, and character preset JSONs into a single unit called a **preset pack**. The pack system exists so users can author their own blend-shape sets and share them with others as self-contained folders.
+
+### Directory layout
+
+```
+ComfyUI-SAM3DBody_utills/
+├── active_preset.ini                    ← selects which pack is active
+└── presets/
+    └── default/                         ← bundled default pack
+        ├── face_blendshapes.npz
+        ├── mhr_reference_vertices.json
+        └── chara_settings_presets/
+            ├── autosave.json
+            ├── chibi.json
+            ├── female.json
+            ├── male.json
+            └── reset.json
+```
+
+`active_preset.ini` content:
+
+```ini
+[active]
+pack = default
+```
+
+### Switching packs
+
+To use a pack someone else shared (say `my_custom_pack`):
+
+1. Drop the pack folder into `presets/my_custom_pack/` (same layout as above)
+2. Change `active_preset.ini` from `pack = default` to `pack = my_custom_pack`
+3. Reload ComfyUI (F5)
+
+If the named pack is missing, the runtime falls back to `default` automatically.
+
+### Creating your own pack
+
+1. Copy `presets/default/` to `presets/my_pack/`
+2. Edit `active_preset.ini` so `pack = my_pack`
+3. Open `tools/bone_backup/all_parts_bs.fbx` in Blender and add / edit the shape keys you want
+4. Run `tools/extract_face_blendshapes.py` — it writes into the active pack (`my_pack`), regenerates `face_blendshapes.npz`, and auto-syncs both `chara_settings_presets/*.json` and `process.py`'s `_UI_BLENDSHAPE_ORDER`
+5. Optionally run `tools/rebuild_vertex_jsons.py` to refresh `mhr_reference_vertices.json`
+6. Zip the `presets/my_pack/` folder and distribute
+
+A pack is fully self-contained — the recipient just unzips it under `presets/` and edits `active_preset.ini`, no code change needed.
+
 ## Example workflows
 
 Three ready-made workflows ship under `workflows/`. Load them from ComfyUI's `Workflow → Open` menu. The bundled `workflows/input_image*.png` / `workflows/input_mask*.png` work as drop-in test inputs.

@@ -29,8 +29,30 @@ import numpy as np
 
 _HERE = Path(__file__).resolve().parent
 _REPO_ROOT = _HERE.parent
-_NPZ_PATH = _REPO_ROOT / "presets" / "face_blendshapes.npz"
-_PRESETS_DIR = _REPO_ROOT / "chara_settings_presets"
+
+
+def _active_pack_dir() -> Path:
+    """Read active_preset.ini to find the active preset pack (stdlib only
+    so this works from Blender's bundled Python, too)."""
+    import configparser
+    ini = _REPO_ROOT / "active_preset.ini"
+    name = "default"
+    if ini.exists():
+        try:
+            cp = configparser.ConfigParser()
+            cp.read(ini, encoding="utf-8")
+            name = cp.get("active", "pack", fallback="default").strip() or "default"
+        except Exception:
+            pass
+    pack_dir = _REPO_ROOT / "presets" / name
+    if not pack_dir.is_dir():
+        pack_dir = _REPO_ROOT / "presets" / "default"
+    return pack_dir
+
+
+_PACK_DIR = _active_pack_dir()
+_NPZ_PATH = _PACK_DIR / "face_blendshapes.npz"
+_PRESETS_DIR = _PACK_DIR / "chara_settings_presets"
 _PROCESS_PY = _REPO_ROOT / "nodes" / "processing" / "process.py"
 
 

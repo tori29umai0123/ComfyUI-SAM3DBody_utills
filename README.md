@@ -203,6 +203,55 @@ See [LICENSE](docs/licenses/LICENSE) for complete license information and [THIRD
 
 SAM 3D Body / MHR 本体や upstream の話題は [PozzettiAndrea/ComfyUI-SAM3DBody の Discussions](https://github.com/PozzettiAndrea/ComfyUI-SAM3DBody/discussions) および [Comfy3D Discord](https://discord.gg/bcdQCUjnHE) が参考になります。
 
+## Preset packs (ブレンドシェイプ定義の切替 / 配布)
+
+このプラグインは、ブレンドシェイプ定義・頂点マップ・キャラクタープリセット JSON を **preset pack** という単位でまとめて管理します。ユーザーがオリジナルのブレンドシェイプ集を作って公開・配布できるようにするための仕組みです。
+
+### ディレクトリ構造
+
+```
+ComfyUI-SAM3DBody_utills/
+├── active_preset.ini                    ← どの pack を使うか指定
+└── presets/
+    └── default/                         ← 同梱のデフォルト pack
+        ├── face_blendshapes.npz
+        ├── mhr_reference_vertices.json
+        └── chara_settings_presets/
+            ├── autosave.json
+            ├── chibi.json
+            ├── female.json
+            ├── male.json
+            └── reset.json
+```
+
+`active_preset.ini` の中身:
+
+```ini
+[active]
+pack = default
+```
+
+### pack の切替
+
+他のユーザーが配布した pack (例: `my_custom_pack`) を使うには:
+
+1. `presets/my_custom_pack/` として pack フォルダを配置 (上記構造と同じレイアウト)
+2. `active_preset.ini` の `pack = default` を `pack = my_custom_pack` に書き換え
+3. ComfyUI を再読み込み (F5)
+
+指定した pack が見つからない場合は自動的に `default` へフォールバックします。
+
+### 独自 pack の作り方
+
+1. `presets/default/` を `presets/my_pack/` にコピー
+2. `active_preset.ini` を `pack = my_pack` に変更
+3. `tools/bone_backup/all_parts_bs.fbx` を Blender で開き、独自のブレンドシェイプを追加・編集
+4. `tools/extract_face_blendshapes.py` を実行 — active pack (`my_pack`) の下に `face_blendshapes.npz` が更新され、`chara_settings_presets/*.json` と `process.py` の UI 順序も自動同期
+5. 必要なら `tools/rebuild_vertex_jsons.py` で `mhr_reference_vertices.json` も再生成
+6. `presets/my_pack/` フォルダ全体を zip して配布
+
+pack 内のファイルはすべて自己完結しているので、受け取ったユーザーは `presets/` に drop して `active_preset.ini` を書き換えるだけで使えます。
+
 ## 同梱ワークフロー例
 
 `workflows/` に 3 種類のサンプルワークフローを同梱しています。ComfyUI のメニューから `Workflow → Open` で読み込んでください。テスト入力として `workflows/input_image*.png` と `workflows/input_mask*.png` がそのまま使えます。
