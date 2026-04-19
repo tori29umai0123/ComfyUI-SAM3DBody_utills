@@ -1,5 +1,7 @@
 # ComfyUI-SAM3DBody
 
+**Language:** 🇯🇵 日本語 (current) ・ [🇬🇧 English](README.en.md)
+
 **[View Workflow Gallery](https://pozzettiandrea.github.io/ComfyUI-SAM3DBody/)**
 
 ComfyUI wrapper for Meta's SAM 3D Body - single-image full-body 3D human mesh recovery.
@@ -186,6 +188,16 @@ See [LICENSE](docs/licenses/LICENSE) for complete license information and [THIRD
 Questions or feature requests? Open a [Discussion](https://github.com/PozzettiAndrea/ComfyUI-SAM3DBody/discussions) on GitHub.
 
 Join the [Comfy3D Discord](https://discord.gg/bcdQCUjnHE) for help, updates, and chat about 3D workflows in ComfyUI.
+
+## 同梱ワークフロー例
+
+`workflows/` に 3 種類のサンプルワークフローを同梱しています。ComfyUI のメニューから `Workflow → Open` で読み込んでください。テスト入力として `workflows/input_image*.png` と `workflows/input_mask*.png` がそのまま使えます。
+
+| ファイル | 内容 | Blender 必須 |
+|---|---|---|
+| **`SAM3Dbody_image.json`** | シンプルな画像レンダリングワークフロー。入力した画像のポーズを、任意の体形でレンダリングする構成 | ❌ |
+| **`SAM3Dbody_FBX.json`** | FBX 出力ワークフロー。入力した画像のポーズを任意の体形に適用し、アニメーション付き FBX として書き出す (Unity / Unreal Engine などで読み込み可能) | ✅ |
+| **`SAM3Dbody _QIE_VNCCSpose.json`** | 実際の使用例ワークフロー。[Qwen-Image-Edit-2511](https://huggingface.co/Qwen/Qwen-Image-Edit) と VNCCSpose LoRA を組み合わせて、体形違いのキャラクター画像からポーズを抽出し、任意の体形の 3D 素体でレンダリングした結果を元に画像編集を行う | ❌ |
 
 ## Render Human From Pose JSON Debug ノード パラメータ説明
 
