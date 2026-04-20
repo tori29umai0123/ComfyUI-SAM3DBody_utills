@@ -30,6 +30,10 @@
 
 `ComfyUI-VideoHelperSuite` で読み込んだ動画 (例: [`docs/sample1.mp4`](docs/sample1.mp4)) を各フレームごとに SAM 3D Body に通し、**基本姿勢でリグ付けされたキャラクターに連続モーションをベイク**したアニメーション FBX として `<ComfyUI>/output/` に書き出します。Unity にドロップすれば、そのまま Animator / Timeline で再生できるモーションクリップになります (※ Blender 必須)。
 
+<video src="https://github.com/tori29umai0123/ComfyUI-SAM3DBody_utills/raw/main/docs/sample1.mp4" controls width="640" muted loop>
+  動画を再生できないブラウザの場合は <a href="docs/sample1.mp4">docs/sample1.mp4</a> を直接ダウンロードしてください。
+</video>
+
 ## 含まれるノード (5 つ)
 
 1. **Load SAM 3D Body Model** — `<ComfyUI>/models/sam3dbody/` からモデル重みを遅延ロード

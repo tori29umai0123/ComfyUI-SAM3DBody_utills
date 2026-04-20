@@ -22,6 +22,10 @@ Write the same posed character out as a rigged FBX — **armature + skinned mesh
 
 Feed a video (for example [`docs/sample1.mp4`](docs/sample1.mp4)) via `ComfyUI-VideoHelperSuite`'s `VHS_LoadVideo` and get an animated FBX that **rigs the character once at the rest pose and bakes every frame of the video as a keyframe**. Drop it into Unity and you have a ready-to-play motion clip (Blender required).
 
+<video src="https://github.com/tori29umai0123/ComfyUI-SAM3DBody_utills/raw/main/docs/sample1.mp4" controls width="640" muted loop>
+  Your browser can't play the embedded video — grab <a href="docs/sample1.mp4">docs/sample1.mp4</a> directly.
+</video>
+
 ## The five nodes
 
 1. **Load SAM 3D Body Model** — lazy-loads the checkpoint from `<ComfyUI>/models/sam3dbody/`.
