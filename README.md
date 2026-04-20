@@ -28,11 +28,13 @@
 
 ### 3. 動画からモーションキャプチャ付き FBX を書き出し
 
-`ComfyUI-VideoHelperSuite` で読み込んだ動画 (例: [`docs/sample1.mp4`](docs/sample1.mp4)) を各フレームごとに SAM 3D Body に通し、**基本姿勢でリグ付けされたキャラクターに連続モーションをベイク**したアニメーション FBX として `<ComfyUI>/output/` に書き出します。Unity にドロップすれば、そのまま Animator / Timeline で再生できるモーションクリップになります (※ Blender 必須)。
+`ComfyUI-VideoHelperSuite` で読み込んだ動画を各フレームごとに SAM 3D Body に通し、**基本姿勢でリグ付けされたキャラクターに連続モーションをベイク**したアニメーション FBX として `<ComfyUI>/output/` に書き出します。Unity にドロップすれば、そのまま Animator / Timeline で再生できるモーションクリップになります (※ Blender 必須)。
 
-<video src="https://github.com/tori29umai0123/ComfyUI-SAM3DBody_utills/raw/main/docs/sample1.mp4" controls width="640" muted loop>
-  動画を再生できないブラウザの場合は <a href="docs/sample1.mp4">docs/sample1.mp4</a> を直接ダウンロードしてください。
-</video>
+<!-- DEMO_VIDEO_START -->
+https://github.com/user-attachments/assets/5b510d8b-22cb-4111-b0be-5d07d4d73fe7
+
+**▶ デモ動画**: 実際に本プラグインで動画から書き出した FBX を再生している様子 (ソース: [`docs/sample1.mp4`](https://github.com/tori29umai0123/ComfyUI-SAM3DBody_utills/blob/main/docs/sample1.mp4))
+<!-- DEMO_VIDEO_END -->
 
 ## 含まれるノード (5 つ)
 
@@ -270,13 +272,13 @@ pack 内のファイルはすべて自己完結しているので、受け取っ
 
 ## 同梱ワークフロー例
 
-`workflows/` に 4 種類のサンプルワークフローを同梱しています。ComfyUI のメニューから `Workflow → Open` で読み込んでください。テスト入力として `workflows/input_image*.png` / `workflows/input_mask*.png`、および動画サンプルとして `docs/sample1.mp4` がそのまま使えます。
+`workflows/` に 4 種類のサンプルワークフローを同梱しています。ComfyUI のメニューから `Workflow → Open` で読み込んでください。テスト入力として `workflows/input_image*.png` / `workflows/input_mask*.png` がそのまま使えます。
 
 | ファイル | 内容 | Blender 必須 |
 |---|---|---|
 | **`SAM3Dbody_image.json`** | シンプルな画像レンダリングワークフロー。入力した画像のポーズを、任意の体形でレンダリングする構成 | ❌ |
 | **`SAM3Dbody_FBX.json`** | FBX 出力ワークフロー。入力した画像のポーズを任意の体形に適用し、アニメーション付き FBX として書き出す (Unity / Unreal Engine などで読み込み可能) | ✅ |
-| **`SAM3Dbody_FBXAnimation.json`** | **動画モーションキャプチャ用ワークフロー**。`VHS_LoadVideo` で読み込んだ動画を `SAM 3D Body: Export Animated FBX` に流し込み、連続モーション付き FBX を出力する (`docs/sample1.mp4` を入力にそのまま使える) | ✅ |
+| **`SAM3Dbody_FBXAnimation.json`** | **動画モーションキャプチャ用ワークフロー**。`VHS_LoadVideo` で読み込んだ動画を `SAM 3D Body: Export Animated FBX` に流し込み、連続モーション付き FBX を出力する | ✅ |
 | **`SAM3Dbody _QIE_VNCCSpose.json`** | 実際の使用例ワークフロー。[Qwen-Image-Edit-2511](https://huggingface.co/Qwen/Qwen-Image-Edit) と VNCCSpose LoRA を組み合わせて、体形違いのキャラクター画像からポーズを抽出し、任意の体形の 3D 素体でレンダリングした結果を元に画像編集を行う | ❌ |
 
 ### `SAM3Dbody _QIE_VNCCSpose.json` の使い方
@@ -533,7 +535,7 @@ Render ノードで見た目を調整してから、その `settings_json` を E
 
 動画 (IMAGE バッチ) から **Unity / Unreal でそのまま再生できるモーション付き FBX** を 1 ノードで書き出すノードです。ComfyUI-VideoHelperSuite の `VHS_LoadVideo` 等で読み込んだフレーム列を渡すと、各フレームを SAM 3D Body に通してジョイント回転を推定し、**基本姿勢 (body_pose=0) でリグ付けされたキャラクターにすべてのフレームをキーフレームとしてベイク**します。出力 FBX はそのまま Animator / Animation / Timeline から再生可能です。
 
-**動画入力例**: 同梱の [`docs/sample1.mp4`](docs/sample1.mp4) をそのまま VHS_LoadVideo に流し込んで試せます。
+出力イメージは README 冒頭の [デモ動画](#3-動画からモーションキャプチャ付き-fbx-を書き出し) (`docs/sample1.mp4`) を参照してください。
 
 > **⚠ 実行には Blender 4.1 以上が必須です。** 内部で `blender.exe --background --python tools/build_animated_fbx.py` を subprocess として呼び出し、アーマチュア構築・LBS スキニング・全フレームのキーフレーム書き込み・FBX エクスポートを行います。
 

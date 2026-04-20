@@ -20,11 +20,13 @@ Write the same posed character out as a rigged FBX — **armature + skinned mesh
 
 ### 3. Export motion-captured FBX from a video
 
-Feed a video (for example [`docs/sample1.mp4`](docs/sample1.mp4)) via `ComfyUI-VideoHelperSuite`'s `VHS_LoadVideo` and get an animated FBX that **rigs the character once at the rest pose and bakes every frame of the video as a keyframe**. Drop it into Unity and you have a ready-to-play motion clip (Blender required).
+Feed a video via `ComfyUI-VideoHelperSuite`'s `VHS_LoadVideo` and get an animated FBX that **rigs the character once at the rest pose and bakes every frame of the video as a keyframe**. Drop it into Unity and you have a ready-to-play motion clip (Blender required).
 
-<video src="https://github.com/tori29umai0123/ComfyUI-SAM3DBody_utills/raw/main/docs/sample1.mp4" controls width="640" muted loop>
-  Your browser can't play the embedded video — grab <a href="docs/sample1.mp4">docs/sample1.mp4</a> directly.
-</video>
+<!-- DEMO_VIDEO_START -->
+https://github.com/user-attachments/assets/5b510d8b-22cb-4111-b0be-5d07d4d73fe7
+
+**▶ Demo video**: Shows a motion-captured FBX exported by this plugin being played back (source: [`docs/sample1.mp4`](https://github.com/tori29umai0123/ComfyUI-SAM3DBody_utills/blob/main/docs/sample1.mp4)).
+<!-- DEMO_VIDEO_END -->
 
 ## The five nodes
 
@@ -242,13 +244,13 @@ A pack is fully self-contained — the recipient just unzips it under `presets/`
 
 ## Example workflows
 
-Four ready-made workflows ship under `workflows/`. Load them from ComfyUI's `Workflow → Open` menu. The bundled `workflows/input_image*.png` / `workflows/input_mask*.png` work as drop-in test inputs, and `docs/sample1.mp4` works as a drop-in test video.
+Four ready-made workflows ship under `workflows/`. Load them from ComfyUI's `Workflow → Open` menu. The bundled `workflows/input_image*.png` / `workflows/input_mask*.png` work as drop-in test inputs.
 
 | File | What it does | Needs Blender |
 |---|---|---|
 | **`SAM3Dbody_image.json`** | Minimal image-rendering workflow. Takes the pose from your input image and renders it onto an arbitrary body shape. | ❌ |
 | **`SAM3Dbody_FBX.json`** | FBX export workflow. Takes the pose from your input image, applies it to an arbitrary body shape, and exports a rigged FBX with a posed animation track — importable into Unity / Unreal Engine. | ✅ |
-| **`SAM3Dbody_FBXAnimation.json`** | **Video motion-capture workflow.** Pipes a video loaded via `VHS_LoadVideo` into `SAM 3D Body: Export Animated FBX` and writes an animated FBX covering every frame. Use `docs/sample1.mp4` as a drop-in test video. | ✅ |
+| **`SAM3Dbody_FBXAnimation.json`** | **Video motion-capture workflow.** Pipes a video loaded via `VHS_LoadVideo` into `SAM 3D Body: Export Animated FBX` and writes an animated FBX covering every frame. | ✅ |
 | **`SAM3Dbody _QIE_VNCCSpose.json`** | A real-world usage example. Combines [Qwen-Image-Edit-2511](https://huggingface.co/Qwen/Qwen-Image-Edit) + the VNCCSpose LoRA: extract the pose from a reference character of a different body shape, render it onto an arbitrary 3D character body, then image-edit the result. | ❌ |
 
 ### How `SAM3Dbody _QIE_VNCCSpose.json` fits together
@@ -482,7 +484,7 @@ Tweak the Render node until the preview looks right, pipe its `settings_json` in
 
 Writes a full **Unity / Unreal-ready animated FBX** straight from a video (IMAGE batch). Feed a sequence of frames via `ComfyUI-VideoHelperSuite`'s `VHS_LoadVideo` (or any other source that emits a batched IMAGE tensor), and the node runs SAM 3D Body on every frame, then bakes all of them as keyframes onto **a character rigged once at its rest pose (body_pose = 0)**. The resulting FBX plays directly in Blender, Unity Animator / Timeline, and Unreal.
 
-**Sample video:** the bundled [`docs/sample1.mp4`](docs/sample1.mp4) works as a drop-in test input for `VHS_LoadVideo`.
+See the [demo video](#3-export-motion-captured-fbx-from-a-video) (`docs/sample1.mp4`) near the top of this README for an example of the exported animation.
 
 > **Blender 4.1+ required.** The node spawns `blender.exe --background --python tools/build_animated_fbx.py` as a subprocess to build the armature, bind the LBS weights, write per-frame keyframes, and export the FBX.
 
