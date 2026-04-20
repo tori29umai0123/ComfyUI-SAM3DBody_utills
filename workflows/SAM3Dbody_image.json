@@ -298,7 +298,7 @@
           ]
         },
         {
-          "name": "debug_image",
+          "name": "image",
           "type": "IMAGE",
           "links": null
         }
@@ -416,7 +416,7 @@
     },
     {
       "id": 124,
-      "type": "SAM3DBodyRenderFromJsonDebug",
+      "type": "SAM3DBodyRenderFromJson",
       "pos": [
         863.5512918187882,
         -750.2589637978243
@@ -469,7 +469,7 @@
       "properties": {
         "cnr_id": "comfyui-sam3dbody_utills",
         "ver": "0.2.1",
-        "Node name for S&R": "SAM3DBodyRenderFromJsonDebug"
+        "Node name for S&R": "SAM3DBodyRenderFromJson"
       },
       "widgets_values": [
         "{}",

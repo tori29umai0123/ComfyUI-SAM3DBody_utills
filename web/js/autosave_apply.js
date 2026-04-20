@@ -1,6 +1,6 @@
 /**
  * SAM3DBody: preset → slider sync for the
- * `SAM 3D Body: Render Human From Pose JSON Debug` node.
+ * `SAM 3D Body: Render Human From Pose JSON` node.
  *
  * The `preset` dropdown drives the slider widgets. When the user picks
  * a preset — including the default `autosave` entry — the frontend
@@ -17,7 +17,7 @@
 import { app } from "../../../../scripts/app.js";
 import { api } from "../../../../scripts/api.js";
 
-const TARGET_NODE = "SAM3DBodyRenderFromJsonDebug";
+const TARGET_NODE = "SAM3DBodyRenderFromJson";
 
 async function fetchPreset(name) {
     if (!name) return null;

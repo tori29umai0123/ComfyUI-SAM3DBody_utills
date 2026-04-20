@@ -287,7 +287,7 @@ class SAM3DBodyExportAnimatedFBX:
     Typical wiring:
         VHS_LoadVideo         ──► images
         LoadSAM3DBodyModel    ──► model
-        RenderFromJsonDebug   ──► character_json (settings_json output)
+        RenderFromJson   ──► character_json (settings_json output)
 
     The character_json supplies body shape / bone lengths / blendshapes
     (identical to SAM3DBodyExportRiggedFBX). The rig is created at the

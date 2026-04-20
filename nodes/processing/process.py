@@ -1027,9 +1027,9 @@ def _render_mesh_software(vertices, faces, cam_t, focal_length, image):
 
 class SAM3DBodyProcessToJson:
     """Run SAM 3D Body on an image and emit the predicted pose as JSON
-    (consumed by the `Render Human From Pose JSON Debug` node).
-    The mesh, skeleton, and debug visualization produced internally are
-    discarded — only the pose parameters reach the downstream nodes."""
+    (consumed by the `Render Human From Pose JSON` node).
+    The mesh, skeleton, and intermediate visualization produced internally
+    are discarded — only the pose parameters reach the downstream nodes."""
 
     @classmethod
     def INPUT_TYPES(cls):
@@ -1058,7 +1058,7 @@ class SAM3DBodyProcessToJson:
         }
 
     RETURN_TYPES = ("STRING", "IMAGE")
-    RETURN_NAMES = ("pose_json", "debug_image")
+    RETURN_NAMES = ("pose_json", "image")
     FUNCTION = "process_to_json"
     CATEGORY = "SAM3DBody/processing"
 
@@ -1118,7 +1118,7 @@ class SAM3DBodyProcessToJson:
         return (pose_json, numpy_to_comfy_image(img_bgr))
 
 
-class SAM3DBodyRenderFromJsonDebug:
+class SAM3DBodyRenderFromJson:
     @classmethod
     def INPUT_TYPES(cls):
         # UI layout (top to bottom):
@@ -1130,7 +1130,7 @@ class SAM3DBodyRenderFromJsonDebug:
         #
         # Per-slider default values are taken from
         # chara_settings_presets/autosave.json (written at the end of
-        # every render_debug call) so the last render's settings persist
+        # every render call) so the last render's settings persist
         # across ComfyUI restarts. ComfyUI's workflow JSON still takes
         # precedence over these defaults for nodes that already have an
         # explicit value saved — autosave only fills in fresh nodes and
@@ -1194,10 +1194,10 @@ class SAM3DBodyRenderFromJsonDebug:
 
     RETURN_TYPES = ("IMAGE", "STRING")
     RETURN_NAMES = ("image", "settings_json")
-    FUNCTION = "render_debug"
-    CATEGORY = "SAM3DBody/debug"
+    FUNCTION = "render"
+    CATEGORY = "SAM3DBody/render"
 
-    def render_debug(self, model, pose_json, preset="none",
+    def render(self, model, pose_json, preset="none",
                      offset_x=0.0, offset_y=0.0, scale_offset=1.0,
                      width=1024, height=1024,
                      body_fat=0.0, body_muscle=0.0, body_fat_muscle=0.0,
@@ -1532,10 +1532,10 @@ class SAM3DBodyRenderFromJsonDebug:
 # Register nodes
 NODE_CLASS_MAPPINGS = {
     "SAM3DBodyProcessToJson": SAM3DBodyProcessToJson,
-    "SAM3DBodyRenderFromJsonDebug": SAM3DBodyRenderFromJsonDebug,
+    "SAM3DBodyRenderFromJson": SAM3DBodyRenderFromJson,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
     "SAM3DBodyProcessToJson": "SAM 3D Body: Process Image to Pose JSON",
-    "SAM3DBodyRenderFromJsonDebug": "SAM 3D Body: Render Human From Pose JSON Debug",
+    "SAM3DBodyRenderFromJson": "SAM 3D Body: Render Human From Pose JSON",
 }

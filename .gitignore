@@ -89,7 +89,7 @@ htmlcov/
 # ==========================================================================
 # User-local runtime state
 # ==========================================================================
-# `autosave.json` is rewritten at the end of every render_debug call, so
+# `autosave.json` is rewritten at the end of every render call, so
 # it's user-local state rather than source. The named presets (female /
 # male / reset / etc.) ARE tracked. Pattern covers any preset pack
 # (default, custom, ...).

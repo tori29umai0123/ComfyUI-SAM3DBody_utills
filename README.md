@@ -38,7 +38,7 @@ https://github.com/user-attachments/assets/4fa43a56-8dd2-4ebf-8abe-61a31ff14e6f
 
 1. **Load SAM 3D Body Model** — `<ComfyUI>/models/sam3dbody/` からモデル重みを遅延ロード
 2. **SAM 3D Body: Process Image to Pose JSON** — SAM 3D Body で入力画像を解析し、ポーズを JSON として出力
-3. **SAM 3D Body: Render Human From Pose JSON Debug** — 推定ポーズを MHR 素体にあてて、体形 / ボーン長 / ブレンドシェイプを全スライダー制御できる状態でレンダリング
+3. **SAM 3D Body: Render Human From Pose JSON** — 推定ポーズを MHR 素体にあてて、体形 / ボーン長 / ブレンドシェイプを全スライダー制御できる状態でレンダリング
 4. **SAM 3D Body: Export Rigged FBX** — アーマチュア + スキニング済みメッシュ + ポーズアニメ付きの FBX を `<ComfyUI>/output/` に書き出す (Blender 必須)
 5. **SAM 3D Body: Export Animated FBX** — 動画 (IMAGE バッチ) から連続モーションをベイクしたアニメーション FBX を書き出す (Blender 必須)
 
@@ -130,7 +130,7 @@ C:/ComfyUI/.venv/Scripts/python.exe install.py
 
 - `Load SAM 3D Body Model`
 - `SAM 3D Body: Process Image to Pose JSON`
-- `SAM 3D Body: Render Human From Pose JSON Debug`
+- `SAM 3D Body: Render Human From Pose JSON`
 
 ### トラブルシューティング
 
@@ -289,7 +289,7 @@ pack 内のファイルはすべて自己完結しているので、受け取っ
 
 このプラグインの出力画像を、**Qwen-Image-Edit のような画像編集モデルに渡す中間出力物**として使う運用を想定したワークフローです。「ポーズは参照キャラから、体形は別キャラから」という 2 系統の入力を、ポーズ正確な 3D 素体を経由してマージできます。
 
-## Render Human From Pose JSON Debug ノード パラメータ説明
+## Render Human From Pose JSON ノード パラメータ説明
 
 入力画像から推定されたポーズ（`pose_json`）を、**MHR ニュートラル体型**の人物モデルに当てはめてレンダリングするノード。
 

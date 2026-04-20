@@ -44,7 +44,7 @@ _KNOWN_JOINT_NAMES = {
 
 
 # Slider -> PCA axis normalization / sign, copied from
-# SAM3DBodyRenderFromJsonDebug so the rigged character's body_params
+# SAM3DBodyRenderFromJson so the rigged character's body_params
 # produce the exact same shape that the render preview shows.
 _SHAPE_SLIDER_NORM = (1.00, 2.78, 4.42, 8.74, 10.82, 11.70, 13.39, 13.83, 16.62)
 _SHAPE_SLIDER_SIGN = (+1, -1, +1, +1, -1, +1, -1, +1, +1)
@@ -52,7 +52,7 @@ _SHAPE_SLIDER_SIGN = (+1, -1, +1, +1, -1, +1, -1, +1, +1)
 
 def _unpack_batched(tensor_tuple):
     """Pick (joint_rots [J,3,3], joint_coords [J,3]) from mhr_forward's
-    tuple by tensor shape — same pattern used in render_debug."""
+    tuple by tensor shape — same pattern used in render."""
     rots = coords = None
     for t in tensor_tuple:
         if t.ndim == 4 and t.shape[-1] == 3 and t.shape[-2] == 3:
@@ -74,7 +74,7 @@ class SAM3DBodyExportRiggedFBX:
 
     Typical wiring:
         LoadSAM3DBodyModel  ──► model
-        RenderFromJsonDebug ──► preset_json   (settings_json output)
+        RenderFromJson ──► preset_json   (settings_json output)
         ProcessImageToJson  ──► pose_json     (pose_json output)
     """
 

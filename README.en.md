@@ -30,7 +30,7 @@ https://github.com/user-attachments/assets/4fa43a56-8dd2-4ebf-8abe-61a31ff14e6f
 
 1. **Load SAM 3D Body Model** — lazy-loads the checkpoint from `<ComfyUI>/models/sam3dbody/`.
 2. **SAM 3D Body: Process Image to Pose JSON** — runs SAM 3D Body on the input image and emits the pose as JSON.
-3. **SAM 3D Body: Render Human From Pose JSON Debug** — renders an MHR neutral body in the estimated pose, with full slider control over body shape, bone length, and FBX-sourced blend shapes.
+3. **SAM 3D Body: Render Human From Pose JSON** — renders an MHR neutral body in the estimated pose, with full slider control over body shape, bone length, and FBX-sourced blend shapes.
 4. **SAM 3D Body: Export Rigged FBX** — writes an armature + skinned mesh + posed animation FBX to `<ComfyUI>/output/`. (Blender required)
 5. **SAM 3D Body: Export Animated FBX** — writes an animated FBX baked from a video (IMAGE batch). The character is rigged once at the rest pose, then every frame becomes a keyframe. (Blender required)
 
@@ -261,7 +261,7 @@ Four ready-made workflows ship under `workflows/`. Load them from ComfyUI's `Wor
 
 The intended use is treating this plugin's render as an **intermediate artifact fed into an image-editing model** (here Qwen-Image-Edit). It lets you merge two separate inputs — "pose from character A, body type from character B" — via a geometrically correct 3D body in the middle.
 
-## Render Human From Pose JSON Debug — parameter reference
+## Render Human From Pose JSON — parameter reference
 
 Takes the pose estimated from an input image (`pose_json`) and renders it onto the **MHR neutral body**.
 
