@@ -18,12 +18,17 @@ Write the same posed character out as a rigged FBX — **armature + skinned mesh
 
 ![sample2](docs/sample2.png)
 
-## The four nodes
+### 3. Export motion-captured FBX from a video
+
+Feed a video (for example [`docs/sample1.mp4`](docs/sample1.mp4)) via `ComfyUI-VideoHelperSuite`'s `VHS_LoadVideo` and get an animated FBX that **rigs the character once at the rest pose and bakes every frame of the video as a keyframe**. Drop it into Unity and you have a ready-to-play motion clip (Blender required).
+
+## The five nodes
 
 1. **Load SAM 3D Body Model** — lazy-loads the checkpoint from `<ComfyUI>/models/sam3dbody/`.
 2. **SAM 3D Body: Process Image to Pose JSON** — runs SAM 3D Body on the input image and emits the pose as JSON.
 3. **SAM 3D Body: Render Human From Pose JSON Debug** — renders an MHR neutral body in the estimated pose, with full slider control over body shape, bone length, and FBX-sourced blend shapes.
 4. **SAM 3D Body: Export Rigged FBX** — writes an armature + skinned mesh + posed animation FBX to `<ComfyUI>/output/`. (Blender required)
+5. **SAM 3D Body: Export Animated FBX** — writes an animated FBX baked from a video (IMAGE batch). The character is rigged once at the rest pose, then every frame becomes a keyframe. (Blender required)
 
 Based on Meta's **SAM 3D Body** + **Momentum Human Rig (MHR)**; both libraries are vendored under their original licenses. See the [License](#license) section.
 
@@ -43,6 +48,7 @@ The following features spawn `blender.exe` as a subprocess and will not work wit
 |---|---|
 | **Adding / editing blend shapes** | Edit shape keys on `tools/bone_backup/all_parts_bs.fbx` in the Blender GUI, then re-run `tools/extract_face_blendshapes.py` headless to rebuild `presets/face_blendshapes.npz` |
 | **`SAM 3D Body: Export Rigged FBX` node** | Calls `blender.exe --background --python tools/build_rigged_fbx.py` internally to build the armature, weld skin weights to vertex groups, and write the FBX |
+| **`SAM 3D Body: Export Animated FBX` node** | Calls `blender.exe --background --python tools/build_animated_fbx.py` internally to bake per-frame rotation keyframes from the input video and write the animated FBX |
 
 **When Blender is not required:** if you only want to render existing characters in ComfyUI using the shipped 18 blend shapes and bundled presets (the `Load → ProcessToJson → Render` chain of three nodes), Blender does not need to be installed at all.
 
@@ -232,12 +238,13 @@ A pack is fully self-contained — the recipient just unzips it under `presets/`
 
 ## Example workflows
 
-Three ready-made workflows ship under `workflows/`. Load them from ComfyUI's `Workflow → Open` menu. The bundled `workflows/input_image*.png` / `workflows/input_mask*.png` work as drop-in test inputs.
+Four ready-made workflows ship under `workflows/`. Load them from ComfyUI's `Workflow → Open` menu. The bundled `workflows/input_image*.png` / `workflows/input_mask*.png` work as drop-in test inputs, and `docs/sample1.mp4` works as a drop-in test video.
 
 | File | What it does | Needs Blender |
 |---|---|---|
 | **`SAM3Dbody_image.json`** | Minimal image-rendering workflow. Takes the pose from your input image and renders it onto an arbitrary body shape. | ❌ |
 | **`SAM3Dbody_FBX.json`** | FBX export workflow. Takes the pose from your input image, applies it to an arbitrary body shape, and exports a rigged FBX with a posed animation track — importable into Unity / Unreal Engine. | ✅ |
+| **`SAM3Dbody_FBXAnimation.json`** | **Video motion-capture workflow.** Pipes a video loaded via `VHS_LoadVideo` into `SAM 3D Body: Export Animated FBX` and writes an animated FBX covering every frame. Use `docs/sample1.mp4` as a drop-in test video. | ✅ |
 | **`SAM3Dbody _QIE_VNCCSpose.json`** | A real-world usage example. Combines [Qwen-Image-Edit-2511](https://huggingface.co/Qwen/Qwen-Image-Edit) + the VNCCSpose LoRA: extract the pose from a reference character of a different body shape, render it onto an arbitrary 3D character body, then image-edit the result. | ❌ |
 
 ### How `SAM3Dbody _QIE_VNCCSpose.json` fits together
@@ -466,6 +473,78 @@ Tweak the Render node until the preview looks right, pipe its `settings_json` in
 - First invocation has a 3–10 s Blender startup overhead
 - An empty `pose_json` (`{"body_pose_params": null, ...}`) just outputs the rest pose — no error
 - The `_slot` / `_hint` placeholder keys in the default text are ignored at runtime
+
+## ⚠ Export Animated FBX node (video motion capture, Blender required)
+
+Writes a full **Unity / Unreal-ready animated FBX** straight from a video (IMAGE batch). Feed a sequence of frames via `ComfyUI-VideoHelperSuite`'s `VHS_LoadVideo` (or any other source that emits a batched IMAGE tensor), and the node runs SAM 3D Body on every frame, then bakes all of them as keyframes onto **a character rigged once at its rest pose (body_pose = 0)**. The resulting FBX plays directly in Blender, Unity Animator / Timeline, and Unreal.
+
+**Sample video:** the bundled [`docs/sample1.mp4`](docs/sample1.mp4) works as a drop-in test input for `VHS_LoadVideo`.
+
+> **Blender 4.1+ required.** The node spawns `blender.exe --background --python tools/build_animated_fbx.py` as a subprocess to build the armature, bind the LBS weights, write per-frame keyframes, and export the FBX.
+
+### Inputs
+
+| Parameter | Default | Notes |
+|---|---|---|
+| model | — | From the Load node |
+| **images** | — | **Video frames** (IMAGE batch). Wire up `VHS_LoadVideo` or any other batched IMAGE source. The `[B,H,W,C]` tensor's B axis is the total number of frames. |
+| **character_json** | placeholder | Character JSON. Wire the Render node's `settings_json` output or paste a preset. The rig is built **once at the rest pose (body_pose = 0)**; every frame is keyframed onto that shared rig. |
+| fps | 30.0 | Animation frame rate. Written to `scene.render.fps`. |
+| bbox_threshold | 0.8 | Person-detection confidence threshold (per frame). |
+| inference_type | `full` | `full` / `body` / `hand` (same meaning as on Process Image to Pose JSON). |
+| blender_exe | `C:/Program Files/Blender Foundation/Blender 4.1/blender.exe` | Path to `blender.exe`. |
+| output_filename | `sam3d_animated.fbx` | Output FBX name under `<ComfyUI>/output/`. Leave blank for a timestamped name. |
+| masks (optional) | — | Per-frame segmentation masks. Used only if the mask count matches the frame count. |
+
+### Outputs
+
+| Output | Notes |
+|---|---|
+| fbx_path | Absolute path of the written FBX (`<ComfyUI>/output/<name>.fbx`) |
+
+### How it works
+
+1. **Python side**
+   - Expands `character_json` and builds **the character's rest mesh + rest skeleton** once, using the same logic as `Export Rigged FBX`. This is the bind pose for the whole animation.
+   - Splits `images` into single frames, runs `SAMBody3DEstimator.process_one_image` per frame to get `body_pose_params` / `hand_pose_params` / `global_rot`.
+   - Re-runs `mhr_forward` with the character's fixed shape params so the posed joint rotations `[J,3,3]` stay shape-consistent across frames.
+   - If no person is detected on a frame, the **previous good pose is reused** so the clip stays contiguous (the very first frame falls back to the rest pose).
+   - Prunes weightless leaf joints (same policy as `Export Rigged FBX`) and dumps all frame rotations + rig data to a temp JSON.
+2. **Blender (subprocess)**
+   - Reconstructs the armature + mesh + LBS weights at the rest pose, identical to `build_rigged_fbx.py`.
+   - Sets `scene.frame_start = 1 / frame_end = N / render.fps = fps`.
+   - For every frame, computes each bone's local delta rotation from the math and keyframes `pose_bone.rotation_quaternion` (location / scale stay at 0 / 1).
+   - Exports the FBX (`bake_anim=True`, `axis_forward=-Z`, `axis_up=Y`).
+
+### Example wiring
+
+```
+VHS_LoadVideo (sample1.mp4) ──► images
+                                  │
+LoadSAM3DBodyModel ──┬────────────┤
+                     │            │
+LoadImage ──► Process ── Render ─► settings_json ─► character_json
+                     │            │
+                     └──► SAM 3D Body: Export Animated FBX
+                                  │
+                       <ComfyUI>/output/sam3d_animated.fbx
+```
+
+The bundled `workflows/SAM3Dbody_FBXAnimation.json` ships this exact wiring.
+
+### Importing into Unity
+
+- The FBX is written **Y-up / -Z-forward**, so dropping it into Unity orients it correctly.
+- In the FBX's Inspector, set `Rig → Animation Type = Humanoid` to use it as a Humanoid retarget source, or leave it on `Generic` — the original bone names are preserved either way.
+- A single Action (`SAM3D_Armature|Scene`) covers all frames; play it from the Animator or a Timeline track directly.
+
+### Notes
+
+- **Blender install required** — same `blender.exe` as the other Blender-dependent features
+- Runtime is dominated by the frame count + Blender startup (expect a few seconds per frame plus 5–10 s of Blender overhead)
+- Long clips increase memory + JSON size. Prefer verifying on a few hundred frames first.
+- Frames where the subject isn't reliably detected get filled in with the previous good pose; lots of missed frames produce choppy motion. Stable lighting and framing help.
+- **Root (pelvis) translation is not currently keyframed** — only joint rotations are baked, so the output motion is effectively "in-place." Even if the subject walks across frame in the source video, the rigged character stays at the origin and plays the motion on the spot.
 
 ## Developer guide: adding new blend shapes
 
