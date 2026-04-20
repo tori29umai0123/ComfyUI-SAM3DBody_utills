@@ -23,6 +23,10 @@ Package JSON schema:
     rest_joint_coords        : [J, 3] — MHR native rest joint world positions
     rest_joint_rots          : [J, 3, 3] — MHR native rest world rotations
     frames_posed_joint_rots  : [N, J, 3, 3] — per-frame posed world rotations
+    frames_root_trans        : [N, 3] — MHR native per-frame root world
+                                        translation (anchored to first
+                                        detected frame = origin). Optional;
+                                        absent/empty means no root motion.
     fps                      : float — animation frame rate
     lbs_v_idx / lbs_j_idx / lbs_weight : sparse LBS skinning weights
 """
@@ -174,7 +178,20 @@ def main():
     num_frames = len(frames_posed_rots)
     if num_frames == 0:
         raise RuntimeError("frames_posed_joint_rots is empty")
-    print(f"[build_animated_fbx] Baking {num_frames} frames @ {fps} fps")
+    frames_root_trans = data.get("frames_root_trans") or []
+    has_root_motion = (
+        len(frames_root_trans) == num_frames
+        and any(any(abs(c) > 1e-8 for c in t) for t in frames_root_trans)
+    )
+    # Identify the (single) root joint so we can write location
+    # keyframes on it. Any joint whose parent is -1 counts; in practice
+    # there is exactly one.
+    root_idx = next((j for j, p in enumerate(parents) if p < 0), None)
+    print(
+        f"[build_animated_fbx] Baking {num_frames} frames @ {fps} fps "
+        f"(root motion: {'yes' if has_root_motion else 'no'}, "
+        f"root bone: {names[root_idx] if root_idx is not None else '<none>'})"
+    )
 
     bpy.context.view_layer.objects.active = arm_obj
     bpy.ops.object.mode_set(mode='POSE')
@@ -192,6 +209,15 @@ def main():
     scene.render.fps = int(round(fps))
 
     rest_rots_T = [R.transposed() for R in rest_rots]
+
+    # Precompute bone-local conversion for the root: world delta -> local
+    # location is `R_rest_root.T @ delta_world`. Cache the transpose so
+    # the per-frame inner loop stays cheap.
+    root_rest_rot_T = rest_rots_T[root_idx] if root_idx is not None else None
+    root_bone = (
+        arm_obj.pose.bones.get(names[root_idx])
+        if root_idx is not None else None
+    )
 
     for f_i, posed_rots_raw in enumerate(frames_posed_rots):
         frame = f_i + 1
@@ -219,6 +245,18 @@ def main():
                 )
             pbone.rotation_quaternion = delta.to_quaternion()
             pbone.keyframe_insert(data_path="rotation_quaternion", frame=frame)
+
+        # Root translation: pose_bone.location lives in the bone's
+        # local rest frame, so we convert the world-space delta with
+        # the root bone's rest rotation. We keyframe every frame (not
+        # just when `has_root_motion` is True) once the feature is
+        # active, to keep the F-Curve dense enough for Unity's clip
+        # importer — otherwise a single initial key would hold.
+        if has_root_motion and root_bone is not None:
+            world_delta = mhr_to_blender_vec(frames_root_trans[f_i])
+            local_delta = root_rest_rot_T @ world_delta
+            root_bone.location = local_delta
+            root_bone.keyframe_insert(data_path="location", frame=frame)
 
     bpy.ops.object.mode_set(mode='OBJECT')
 

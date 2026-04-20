@@ -31,9 +31,7 @@
 `ComfyUI-VideoHelperSuite` で読み込んだ動画を各フレームごとに SAM 3D Body に通し、**基本姿勢でリグ付けされたキャラクターに連続モーションをベイク**したアニメーション FBX として `<ComfyUI>/output/` に書き出します。Unity にドロップすれば、そのまま Animator / Timeline で再生できるモーションクリップになります (※ Blender 必須)。
 
 <!-- DEMO_VIDEO_START -->
-https://github.com/user-attachments/assets/5b510d8b-22cb-4111-b0be-5d07d4d73fe7
-
-**▶ デモ動画**: 実際に本プラグインで動画から書き出した FBX を再生している様子 (ソース: [`docs/sample1.mp4`](https://github.com/tori29umai0123/ComfyUI-SAM3DBody_utills/blob/main/docs/sample1.mp4))
+https://github.com/user-attachments/assets/4fa43a56-8dd2-4ebf-8abe-61a31ff14e6f
 <!-- DEMO_VIDEO_END -->
 
 ## 含まれるノード (5 つ)
@@ -549,6 +547,7 @@ Render ノードで見た目を調整してから、その `settings_json` を E
 | fps | 30.0 | 出力アニメーションのフレームレート。Blender の `scene.render.fps` に反映 |
 | bbox_threshold | 0.8 | 人物検出の信頼度しきい値 (フレームごと) |
 | inference_type | `full` | `full` / `body` / `hand` (`Process Image to Pose JSON` と同じ) |
+| **root_motion_mode** | `auto_ground_lock` | ルート Y 軸の補正モード ([詳細](#ルート移動の補正-root_motion_mode))。`auto_ground_lock` / `free` / `xz_only` から選択 |
 | blender_exe | `C:/Program Files/Blender Foundation/Blender 4.1/blender.exe` | Blender 実行ファイルのパス |
 | output_filename | `sam3d_animated.fbx` | 出力 FBX 名。空にするとタイムスタンプ付きで自動命名 |
 | masks (任意) | — | フレーム数が一致する場合のみ、各フレームの人物マスクを検出補助として使用 |
@@ -601,7 +600,54 @@ LoadImage ──► Process ── Render ─► settings_json ─► character_
 - 処理時間は動画の長さ + Blender 起動オーバーヘッドで支配されます (1 フレームあたり数秒 + Blender 起動 5〜10 秒)
 - 長尺クリップはメモリ / JSON サイズが増えるため、まずは数百フレーム以内で動作確認することをおすすめします
 - 人物が安定して映っていないフレームが多いと補完フレームが増え、動きがカクつくことがあります。照明・構図の安定した動画のほうが良い結果になります
-- **ルート (pelvis) の移動は現状キーフレーム化していません** — 関節回転のみをベイクしているため、その場でのモーション (in-place) として出力されます。実際に画面内を移動する素材でも、出力では固定位置で動く形になります
+- **ルートの位置移動・回転はキーフレーム化されます** — SAM 3D Body が推定した `pred_cam_t` (被写体のカメラ相対位置) を最初の検出フレームで原点に正規化してルートボーンの location にベイクするため、動画内での歩行・旋回・前後移動が FBX にそのまま反映されます。カメラが固定であることを前提にしているので、**カメラ自体が動く動画では正確な空間移動にはなりません** (カメラワーク込みの相対位置が焼き込まれます)
+- 立ち止まっているのに宙に浮いてしまう・地面に沈み込んでしまう症状は `root_motion_mode = auto_ground_lock` (既定) で補正されます。詳細は次節を参照
+
+### ルート移動の補正 (`root_motion_mode`)
+
+`pred_cam_t` には深度推定の誤差・カメラ傾きの吸収・フレーム間ジッタが含まれ、そのまま使うと **静止しているのに宙に浮く / 地面にめり込む** 症状が出ることがあります。`root_motion_mode` で補正方式を選べます。
+
+| モード | 挙動 | 推奨ユースケース |
+|---|---|---|
+| **`auto_ground_lock`** (既定) | per-frame で「現在接地している足」を検出し、その足が常に rest 足 Y に来るよう **フレームごとに Y を補正**。飛行フェーズは前後の接地から補間する | 歩行 / 走行 / ジャンプ / 片足立ち / 両足立ち / ダンスなど **ほぼすべての mocap 素材** |
+| **`free`** | `pred_cam_t` を生のまま使用。補正なし | DCC 側でルート位置を独自に後処理する前提の中間出力。デバッグ用 |
+| **`xz_only`** | Y 成分を完全にゼロ化 (水平移動のみ残す)。ジャンプも失われる | 格闘ゲームの待機・攻撃モーションなど「ループさせたい / 足は IK 制御したい」クリップ |
+
+**仕組み (`auto_ground_lock`)**:
+
+1. 各フレームの `mhr_forward(global_trans=0)` から両足関節 (`foot_l` / `foot_r`) の 3D 位置を取得
+2. **接地判定** (per-frame, per-foot):
+   - 低 (`pose_foot_y <= rest_foot_y + 15cm`, ポーズ空間 = drift-free)
+   - 静止 (`world Y 速度 <= 0.03m/frame`) — ワールド速度を使うことで**ジャンプ中の足は明示的に非接地と判定**される
+3. 単発ノイズ除去のため「連続 2 フレーム以上接地」のみを真の接地とする (hysteresis)
+4. 各フレームで接地足があれば、その足の world Y が rest 足 Y に一致するよう per-frame offset を計算。接地足が無い空中フレームは前後の offset から線形補間
+5. 最後に Savitzky-Golay フィルタ (窓 5・2 次) で offset 曲線を平滑化
+
+**シナリオ別の挙動**:
+
+| シナリオ | 接地判定の動き | 補正結果 |
+|---|---|---|
+| 両足立ち | 両足ずっと接地 | 一定 offset で全クリップ地面ロック |
+| 片足立ち (バランス) | 支持足のみ接地 (遊脚は Y 閾値で除外) | 支持足が地面にロック、遊脚は自由 |
+| 歩行 | 左右交互 + 双脚支持で常にどちらか接地 | 各瞬間の支持足基準、ブレなし |
+| 走行 | 単脚支持の瞬間のみ接地、飛行フェーズは NaN | 飛行中は前後接地から補間、走行軌道自然 |
+| ジャンプ | 離陸前・着地後のみ接地、飛行中は非接地 (ワールド速度検出) | 飛行中は前後の offset で補間、ジャンプ高さは保持 |
+| 純粋飛行クリップ | 接地フレーム 0 | fallback: クリップ全体 min シフト (旧アルゴリズム相当) |
+
+**パラメータ (内部固定、必要なら `nodes/processing/export_animated.py` の `_GL_*` 定数を編集)**:
+
+| 定数 | 値 | 意味 |
+|---|---|---|
+| `_GL_Y_THR` | 0.15 m | rest 足 Y からの接地判定高さ |
+| `_GL_V_THR` | 0.03 m/frame | world Y 速度の接地判定閾値 (30fps で ~0.9 m/s) |
+| `_GL_MIN_CONTACT_RUN` | 2 | 連続接地フレーム数の下限 (チャタリング除去) |
+| `_GL_SMOOTH_WINDOW` | 5 | Savitzky-Golay 窓幅 |
+| `_GL_SMOOTH_ORDER` | 2 | Savitzky-Golay 多項式次数 |
+| `_GL_MIN_CONTACTS_TOTAL` | 3 | これ未満なら global min fallback |
+
+**ログの読み方**:
+- `ground_lock contact-based: N/M frames with contact, offset range=[+x, +y]` → 正常動作。N が少なすぎると精度低下
+- `ground_lock fallback (N/M contact frames < 3): global min correction=±x` → 接地フレーム不足で旧アルゴリズムに縮退。クリップが空中浮遊ならこれで正しい
 
 ## 開発者ガイド: 新しいブレンドシェイプの追加
 

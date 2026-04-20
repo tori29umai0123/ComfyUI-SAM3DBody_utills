@@ -42,6 +42,13 @@ from .export_rigged import (
 _UTILS_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 _BUILD_SCRIPT = os.path.join(_UTILS_ROOT, "tools", "build_animated_fbx.py")
 
+# MHR joint indices for the feet, used by the ground-lock correction.
+# Keep in sync with _KNOWN_JOINT_NAMES in export_rigged.py.
+_FOOT_JOINT_L = 4    # foot_l
+_FOOT_JOINT_R = 20   # foot_r
+
+_ROOT_MOTION_MODES = ("auto_ground_lock", "free", "xz_only")
+
 
 def _comfy_frame_to_bgr(image_tensor, frame_idx):
     """Extract frame `frame_idx` from a ComfyUI IMAGE tensor [B,H,W,C]
@@ -61,6 +68,217 @@ def _mask_frame_bbox(mask_np_2d):
     rmin, rmax = np.where(rows)[0][[0, -1]]
     cmin, cmax = np.where(cols)[0][[0, -1]]
     return np.array([[cmin, rmin, cmax, rmax]], dtype=np.float32)
+
+
+def _as_vec3(value):
+    """Normalise a value-of-unknown-type (torch.Tensor / np.ndarray / list /
+    None) into a float32 3-vector, or return None if it can't be
+    reduced to three scalars. Used to pull `pred_cam_t` from the raw
+    estimator output regardless of how the model packages it."""
+    if value is None:
+        return None
+    if hasattr(value, "detach"):
+        value = value.detach().cpu().numpy()
+    try:
+        arr = np.asarray(value, dtype=np.float32).reshape(-1)
+    except Exception:
+        return None
+    if arr.size < 3:
+        return None
+    return arr[:3].copy()
+
+
+def _normalise_translations(raw_trans):
+    """Turn the list of per-frame cam translations (each either a 3-vec
+    or None) into a dense [N, 3] list anchored on the first detected
+    frame: before any detection we emit zeros; after that, missing
+    detections reuse the most recent known translation; the whole
+    trajectory is shifted so the anchor frame sits at the origin."""
+    n = len(raw_trans)
+    if n == 0:
+        return []
+    anchor = None
+    last_known = np.zeros(3, dtype=np.float32)
+    out = []
+    for t in raw_trans:
+        if t is not None:
+            if anchor is None:
+                anchor = t.copy()
+            last_known = t
+        if anchor is None:
+            out.append(np.zeros(3, dtype=np.float32))
+        else:
+            out.append((last_known - anchor).astype(np.float32))
+    return [v.tolist() for v in out]
+
+
+# =========================================================================
+# Contact-based ground lock
+# =========================================================================
+# Per-frame foot-contact detection + anchored Y correction. Replaces the
+# naive global-min approach so that walking / running / one-foot balance /
+# jumping all produce a grounded trajectory at once. See the README
+# section "root_motion_mode" for the design rationale.
+
+# Pose Y threshold: a foot is "low" if its pose-frame Y sits within this
+# distance of the rest foot Y. Pose-frame Y is drift-free, so this is a
+# tight discriminator between grounded and lifted feet.
+_GL_Y_THR = 0.15
+
+# World Y velocity threshold for "still" feet. We use WORLD (not pose)
+# Y velocity here: during a straight-body jump the pose Y barely moves
+# but the WORLD Y does, so this is the only signal that correctly
+# excludes flight frames as non-contact.
+_GL_V_THR = 0.03
+
+# Minimum run length for a contact label (debounces single-frame flicker).
+_GL_MIN_CONTACT_RUN = 2
+
+# Savitzky-Golay smoothing applied to the final offset curve.
+_GL_SMOOTH_WINDOW = 5
+_GL_SMOOTH_ORDER = 2
+
+# If fewer than this many frames end up flagged as contact, fall back to
+# the simple global-min approach so the pipeline always produces *some*
+# correction.
+_GL_MIN_CONTACTS_TOTAL = 3
+
+
+def _y_central_diff(y):
+    """Absolute-value central difference along axis 0 of a [N, ...] array.
+    Edges use one-sided differences. Returns same shape as input."""
+    n = y.shape[0]
+    out = np.zeros_like(y)
+    if n < 2:
+        return out
+    out[1:-1] = np.abs(y[2:] - y[:-2]) / 2.0
+    out[0] = np.abs(y[1] - y[0])
+    out[-1] = np.abs(y[-1] - y[-2])
+    return out
+
+
+def _apply_contact_hysteresis(is_contact_raw, min_run):
+    """Zero out contact runs shorter than `min_run` consecutive frames.
+    Works column-wise (each foot independently)."""
+    n, nf = is_contact_raw.shape
+    out = np.zeros_like(is_contact_raw)
+    for f in range(nf):
+        col = is_contact_raw[:, f]
+        i = 0
+        while i < n:
+            if col[i]:
+                j = i
+                while j < n and col[j]:
+                    j += 1
+                if (j - i) >= min_run:
+                    out[i:j, f] = True
+                i = j
+            else:
+                i += 1
+    return out
+
+
+def _fill_nan_linear(arr):
+    """Linearly interpolate NaNs in a 1-D array. Leading/trailing NaN
+    runs get hold-extrapolated to the nearest finite value."""
+    arr = arr.copy()
+    nan_mask = np.isnan(arr)
+    if not nan_mask.any():
+        return arr
+    if nan_mask.all():
+        return np.zeros_like(arr)
+    valid_idx = np.where(~nan_mask)[0]
+    # np.interp clamps out-of-range x to yp[0] / yp[-1], which is the
+    # hold-extrapolation we want for leading/trailing NaN.
+    all_idx = np.arange(len(arr))
+    arr[nan_mask] = np.interp(all_idx[nan_mask], valid_idx, arr[valid_idx])
+    return arr
+
+
+def _smooth_offset(offset, window, order):
+    """Savitzky-Golay smoothing with a moving-average fallback if scipy
+    is missing or the signal is too short for the requested window."""
+    n = len(offset)
+    if n < window or window < 3:
+        return offset
+    try:
+        from scipy.signal import savgol_filter
+        return savgol_filter(offset, window_length=window, polyorder=order).astype(np.float32)
+    except Exception:
+        # Odd-window moving average with edge padding.
+        k = window // 2
+        padded = np.pad(offset, k, mode='edge')
+        kernel = np.ones(window, dtype=np.float32) / float(window)
+        return np.convolve(padded, kernel, mode='valid').astype(np.float32)
+
+
+def _compute_ground_lock_offset(feet_pos_arr, trans_arr, rest_foot_y):
+    """Per-frame Y correction using contact-based anchoring.
+
+    feet_pos_arr : [N, 2, 3] pose-frame foot positions (trans=0)
+    trans_arr    : [N, 3]    current (uncorrected) root translations
+    rest_foot_y  : scalar    rest-pose ground-level foot Y (MHR native)
+
+    Returns a 1-D np.float32 array of length N that should be ADDED to
+    trans_arr[:, 1] to pin the currently-supporting foot to the ground.
+
+    Algorithm (see docstring of module-level _GL_* constants):
+      1. Contact mask = (low in pose) AND (still in world).
+      2. Hysteresis debounce.
+      3. Anchor Y per frame = min contact-foot world Y (NaN if no contact).
+      4. Linear interp over NaN gaps (flight phases).
+      5. offset = rest_foot_y - anchor_y, Savitzky-Golay smoothed.
+      6. Fallback: too few contacts -> global-min correction (scalar).
+    """
+    n = feet_pos_arr.shape[0]
+    if n == 0:
+        return np.zeros(0, dtype=np.float32)
+
+    pose_feet_y = feet_pos_arr[..., 1].astype(np.float32)  # [N, 2]
+    world_feet_y = pose_feet_y + trans_arr[:, 1:2].astype(np.float32)  # [N, 2]
+
+    # 1. Contact detection.
+    is_low = pose_feet_y <= (rest_foot_y + _GL_Y_THR)
+    world_y_vel = _y_central_diff(world_feet_y)
+    is_still = world_y_vel <= _GL_V_THR
+    is_contact_raw = is_low & is_still
+
+    # 2. Hysteresis.
+    is_contact = _apply_contact_hysteresis(is_contact_raw, _GL_MIN_CONTACT_RUN)
+
+    contact_frame_count = int(is_contact.any(axis=1).sum())
+    if contact_frame_count < _GL_MIN_CONTACTS_TOTAL:
+        # Fallback: clipwide global min (the old auto_ground_lock).
+        min_world = float(world_feet_y.min())
+        correction = float(rest_foot_y - min_world)
+        print(
+            f"[SAM3DBody] ground_lock fallback "
+            f"({contact_frame_count}/{n} contact frames < "
+            f"{_GL_MIN_CONTACTS_TOTAL}): global min correction={correction:+.3f}"
+        )
+        return np.full(n, correction, dtype=np.float32)
+
+    # 3. Per-frame anchor Y (NaN where no contact).
+    anchor_y = np.full(n, np.nan, dtype=np.float32)
+    for i in range(n):
+        row_mask = is_contact[i]
+        if row_mask.any():
+            anchor_y[i] = float(world_feet_y[i, row_mask].min())
+
+    # 4. Fill flight-phase NaN via linear interpolation.
+    anchor_y = _fill_nan_linear(anchor_y)
+
+    # 5. Offset + smoothing.
+    offset = (rest_foot_y - anchor_y).astype(np.float32)
+    offset = _smooth_offset(offset, _GL_SMOOTH_WINDOW, _GL_SMOOTH_ORDER)
+
+    print(
+        f"[SAM3DBody] ground_lock contact-based: "
+        f"{contact_frame_count}/{n} frames with contact, "
+        f"offset range=[{float(offset.min()):+.3f}, {float(offset.max()):+.3f}], "
+        f"mean={float(offset.mean()):+.3f}"
+    )
+    return offset
 
 
 class SAM3DBodyExportAnimatedFBX:
@@ -118,6 +336,14 @@ class SAM3DBodyExportAnimatedFBX:
                     "default": "full",
                     "tooltip": "full: body+hand / body: body のみ / hand: hand のみ",
                 }),
+                "root_motion_mode": (list(_ROOT_MOTION_MODES), {
+                    "default": "auto_ground_lock",
+                    "tooltip": "ルート位置 (Y 軸) の補正モード。\n"
+                               "auto_ground_lock: クリップ全体の足最下点を rest 足 Y に揃え、"
+                               "浮き / 沈みを解消しつつジャンプは保持 (推奨)。\n"
+                               "free: pred_cam_t をそのまま使用 (カメラ傾き由来の浮き・沈みが残る)。\n"
+                               "xz_only: Y 成分を無効化 (水平移動のみ、ジャンプも失われる)。",
+                }),
                 "blender_exe": ("STRING", {
                     "default": _DEFAULT_BLENDER,
                     "tooltip": "blender.exe のパス (subprocess 呼び出し)",
@@ -143,9 +369,16 @@ class SAM3DBodyExportAnimatedFBX:
 
     def export(self, model, images, character_json, fps,
                bbox_threshold, inference_type,
-               blender_exe, output_filename, masks=None):
+               blender_exe, output_filename,
+               root_motion_mode="auto_ground_lock",
+               masks=None):
         import folder_paths
         from ..sam_3d_body import SAM3DBodyEstimator
+
+        if root_motion_mode not in _ROOT_MOTION_MODES:
+            print(f"[SAM3DBody] unknown root_motion_mode '{root_motion_mode}', "
+                  f"falling back to 'auto_ground_lock'")
+            root_motion_mode = "auto_ground_lock"
 
         try:
             preset = json.loads(character_json) if character_json.strip() else {}
@@ -276,7 +509,13 @@ class SAM3DBodyExportAnimatedFBX:
         )
 
         frames_posed_rots = []  # [N, J, 3, 3]
+        raw_trans = []           # list of 3-vec (MHR native) or None
+        frames_feet_pos = []     # [N, 2, 3] — (foot_l, foot_r) MHR native, trans=0
         last_good_pose = None
+        last_good_feet_pos = np.stack([
+            np.asarray(char_rest_coords[_FOOT_JOINT_L], dtype=np.float32),
+            np.asarray(char_rest_coords[_FOOT_JOINT_R], dtype=np.float32),
+        ], axis=0)
         skipped = 0
         for f_i in range(num_frames):
             img_bgr = _comfy_frame_to_bgr(images, f_i)
@@ -307,8 +546,10 @@ class SAM3DBodyExportAnimatedFBX:
 
             if not outputs:
                 # No person detected this frame — reuse the previous frame's
-                # pose so the clip stays contiguous. If the very first frame
-                # has no detection we bake an identity (rest) pose for it.
+                # pose + feet so the clip stays contiguous. If the very
+                # first frame has no detection we bake an identity (rest)
+                # pose for it. Root translation gets the same treatment
+                # inside _normalise_translations() after the loop.
                 skipped += 1
                 if last_good_pose is None:
                     print(f"[SAM3DBody] frame {f_i+1}: no detection, using rest pose")
@@ -317,6 +558,8 @@ class SAM3DBodyExportAnimatedFBX:
                     print(f"[SAM3DBody] frame {f_i+1}: no detection, reusing prev pose")
                     posed_rots = last_good_pose
                 frames_posed_rots.append(posed_rots)
+                frames_feet_pos.append(last_good_feet_pos.copy())
+                raw_trans.append(None)
                 continue
 
             raw = outputs[0]
@@ -336,10 +579,39 @@ class SAM3DBodyExportAnimatedFBX:
                     return_joint_rotations=True,
                     return_joint_coords=True,
                 )
-            posed_rots, _ = _unpack_batched(posed_out[1:])
+            posed_rots, posed_coords = _unpack_batched(posed_out[1:])
             posed_rots = posed_rots.astype(np.float32)
             last_good_pose = posed_rots
             frames_posed_rots.append(posed_rots)
+
+            # Per-frame feet 3D position (MHR native, with global_trans=0)
+            # for the contact-based ground-lock correction. Full 3D is
+            # needed so the solver can reason about foot motion in both
+            # pose space (for Y threshold) and world space (for stillness
+            # detection, once trans is layered on).
+            if posed_coords is not None:
+                pc = np.asarray(posed_coords, dtype=np.float32)
+                feet_pos = np.stack([
+                    pc[_FOOT_JOINT_L],
+                    pc[_FOOT_JOINT_R],
+                ], axis=0)  # [2, 3]
+                last_good_feet_pos = feet_pos
+            else:
+                feet_pos = last_good_feet_pos.copy()
+            frames_feet_pos.append(feet_pos)
+
+            # Root translation — capture pred_cam_t (MHR-native world
+            # position of the subject relative to the fixed camera). Any
+            # of pred_cam_t / camera / global_trans may be the populated
+            # key depending on the SAM3D model variant, so check them in
+            # priority order. Note: can't use `a or b or c` here because
+            # _as_vec3 returns numpy arrays, which raise on `bool(arr)`.
+            cam_vec = None
+            for key in ("pred_cam_t", "camera", "global_trans"):
+                cam_vec = _as_vec3(raw.get(key))
+                if cam_vec is not None:
+                    break
+            raw_trans.append(cam_vec)
 
             if (f_i + 1) % 10 == 0 or f_i == num_frames - 1:
                 print(f"[SAM3DBody] pose estimation {f_i+1}/{num_frames}")
@@ -380,9 +652,45 @@ class SAM3DBodyExportAnimatedFBX:
         j_idx_new = j_idx_new[valid]
         w_val = w_val[valid]
 
+        # Per-frame root translation (MHR native, anchored to first
+        # detected frame so the clip starts at the origin). Rotation
+        # around the vertical axis is already baked into
+        # frames_posed_joint_rots[root] via the global_rot the estimator
+        # feeds into mhr_forward; this `frames_root_trans` carries the
+        # remaining position delta so Blender can keyframe location on
+        # the root bone.
+        frames_root_trans = _normalise_translations(raw_trans)
+        detected_trans = sum(1 for t in raw_trans if t is not None)
+
+        # Apply the user-selected vertical correction. `auto_ground_lock`
+        # solves the most common "character floats above the ground" bug
+        # that comes from pred_cam_t depth jitter; `xz_only` kills
+        # vertical motion entirely (in-place walking); `free` preserves
+        # the raw pred_cam_t for callers that want to post-process
+        # themselves.
+        if frames_root_trans:
+            trans_arr = np.asarray(frames_root_trans, dtype=np.float32)
+            if root_motion_mode == "xz_only":
+                trans_arr[:, 1] = 0.0
+                print("[SAM3DBody] root_motion_mode=xz_only: zeroed Y component")
+            elif root_motion_mode == "auto_ground_lock" and frames_feet_pos:
+                feet_pos_arr = np.stack(frames_feet_pos, axis=0)  # [N, 2, 3]
+                rest_feet_y = float(min(
+                    char_rest_coords[_FOOT_JOINT_L][1],
+                    char_rest_coords[_FOOT_JOINT_R][1],
+                ))
+                offset = _compute_ground_lock_offset(
+                    feet_pos_arr, trans_arr, rest_feet_y
+                )
+                trans_arr[:, 1] += offset
+            else:
+                print(f"[SAM3DBody] root_motion_mode={root_motion_mode}: no Y correction")
+            frames_root_trans = trans_arr.tolist()
+
         print(
             f"[SAM3DBody] animated FBX: kept {len(kept_idx)} / {num_joints} joints, "
-            f"{len(frames_posed_rots_out)} frames"
+            f"{len(frames_posed_rots_out)} frames "
+            f"(pred_cam_t captured on {detected_trans}/{num_frames} frames)"
         )
 
         # ============ Output path ============
@@ -403,6 +711,7 @@ class SAM3DBodyExportAnimatedFBX:
             "rest_joint_coords": rest_coords_out.tolist(),
             "rest_joint_rots":   rest_rots_out.tolist(),
             "frames_posed_joint_rots": frames_posed_rots_out,
+            "frames_root_trans":       frames_root_trans,
             "lbs_v_idx":  v_idx.astype(np.int32).tolist(),
             "lbs_j_idx":  j_idx_new.astype(np.int32).tolist(),
             "lbs_weight": w_val.tolist(),

@@ -23,9 +23,7 @@ Write the same posed character out as a rigged FBX — **armature + skinned mesh
 Feed a video via `ComfyUI-VideoHelperSuite`'s `VHS_LoadVideo` and get an animated FBX that **rigs the character once at the rest pose and bakes every frame of the video as a keyframe**. Drop it into Unity and you have a ready-to-play motion clip (Blender required).
 
 <!-- DEMO_VIDEO_START -->
-https://github.com/user-attachments/assets/5b510d8b-22cb-4111-b0be-5d07d4d73fe7
-
-**▶ Demo video**: Shows a motion-captured FBX exported by this plugin being played back (source: [`docs/sample1.mp4`](https://github.com/tori29umai0123/ComfyUI-SAM3DBody_utills/blob/main/docs/sample1.mp4)).
+https://github.com/user-attachments/assets/4fa43a56-8dd2-4ebf-8abe-61a31ff14e6f
 <!-- DEMO_VIDEO_END -->
 
 ## The five nodes
@@ -498,6 +496,7 @@ See the [demo video](#3-export-motion-captured-fbx-from-a-video) (`docs/sample1.
 | fps | 30.0 | Animation frame rate. Written to `scene.render.fps`. |
 | bbox_threshold | 0.8 | Person-detection confidence threshold (per frame). |
 | inference_type | `full` | `full` / `body` / `hand` (same meaning as on Process Image to Pose JSON). |
+| **root_motion_mode** | `auto_ground_lock` | Vertical-root correction mode (see [details](#root-motion-correction-root_motion_mode)). One of `auto_ground_lock` / `free` / `xz_only`. |
 | blender_exe | `C:/Program Files/Blender Foundation/Blender 4.1/blender.exe` | Path to `blender.exe`. |
 | output_filename | `sam3d_animated.fbx` | Output FBX name under `<ComfyUI>/output/`. Leave blank for a timestamped name. |
 | masks (optional) | — | Per-frame segmentation masks. Used only if the mask count matches the frame count. |
@@ -550,7 +549,54 @@ The bundled `workflows/SAM3Dbody_FBXAnimation.json` ships this exact wiring.
 - Runtime is dominated by the frame count + Blender startup (expect a few seconds per frame plus 5–10 s of Blender overhead)
 - Long clips increase memory + JSON size. Prefer verifying on a few hundred frames first.
 - Frames where the subject isn't reliably detected get filled in with the previous good pose; lots of missed frames produce choppy motion. Stable lighting and framing help.
-- **Root (pelvis) translation is not currently keyframed** — only joint rotations are baked, so the output motion is effectively "in-place." Even if the subject walks across frame in the source video, the rigged character stays at the origin and plays the motion on the spot.
+- **Root translation and rotation are keyframed** — the node reads the per-frame `pred_cam_t` (subject position in camera space) estimated by SAM 3D Body, anchors it to the first detected frame so the clip starts at the origin, and bakes it onto the root bone's `location` F-Curve. Walking / turning / stepping forward in the source video reaches the FBX directly. This assumes a **static camera** in the source video — if the camera moves, the baked trajectory will be the *camera-relative* motion of the subject, not true world-space movement.
+- If the character floats above the ground (or sinks into it) while standing still, the `auto_ground_lock` default of `root_motion_mode` corrects it. See the next section.
+
+### Root motion correction (`root_motion_mode`)
+
+`pred_cam_t` carries depth-estimation noise, absorbs camera tilt, and jitters frame-to-frame, so using it raw can make the character **float in mid-air or sink into the floor while standing still**. `root_motion_mode` picks the correction strategy.
+
+| Mode | Behaviour | Recommended for |
+|---|---|---|
+| **`auto_ground_lock`** (default) | Per-frame contact detection — identifies which foot is on the ground at each moment, and applies a per-frame Y offset so that foot sits at the rest-pose ground level. Flight phases are filled in by interpolating the offset between the surrounding contact frames | Walking / running / jumping / one-foot balance / two-foot stance / dance — **essentially any mocap clip** |
+| **`free`** | Uses `pred_cam_t` as-is. No correction | Intermediate output when you plan to fix the root path in a DCC. Debugging |
+| **`xz_only`** | Drops the Y component entirely (horizontal motion only). Jumps are lost too | In-place animations — fighting-game idles / attacks where the animation loops and feet are IK-driven |
+
+**How `auto_ground_lock` works**:
+
+1. Per frame, extract both feet's 3D position from `mhr_forward(global_trans=0)`
+2. **Contact detection** (per frame, per foot):
+   - Low (`pose_foot_y <= rest_foot_y + 15cm`, pose-frame = drift-free)
+   - Still (`|world Y velocity| <= 0.03m/frame`) — using WORLD velocity is what lets us correctly flag jump / flight frames as non-contact even though the pose-frame foot barely moves during a straight-body jump
+3. Hysteresis: a foot only counts as in contact if it passes both tests for at least 2 consecutive frames (debounces single-frame flicker)
+4. Per frame, if any foot is in contact, compute the offset needed to put its world Y at the rest-pose foot Y. Frames with no contact get a NaN offset, which is then linearly interpolated from surrounding contact frames
+5. Smooth the final offset curve with a Savitzky-Golay filter (window 5, order 2)
+
+**Scenario behaviour**:
+
+| Scenario | Contact-detection result | Outcome |
+|---|---|---|
+| Two-foot stance | Both feet in contact throughout | Flat offset, clip ground-locked |
+| One-foot balance | Only supporting foot passes (lifted foot fails the Y threshold) | Supporting foot anchored, lifted foot free |
+| Walking | Always at least one foot in contact (alternating + double support) | Smooth per-frame anchor |
+| Running | Contact during single-support phases, NaN during flight | Flight interpolated between surrounding contacts |
+| Jumping | Contact before takeoff and after landing only (world-velocity excludes flight) | Flight interpolated, jump height preserved as relative pose difference |
+| Pure flight clip | Zero contact frames | Fallback: global-min shift (equivalent to the old algorithm) |
+
+**Tunables (hardcoded constants in `nodes/processing/export_animated.py`)**:
+
+| Constant | Value | Meaning |
+|---|---|---|
+| `_GL_Y_THR` | 0.15 m | How far above `rest_foot_y` still counts as "low" |
+| `_GL_V_THR` | 0.03 m/frame | World Y-velocity cutoff (~0.9 m/s at 30 fps) |
+| `_GL_MIN_CONTACT_RUN` | 2 | Minimum consecutive contact frames (debouncing) |
+| `_GL_SMOOTH_WINDOW` | 5 | Savitzky-Golay window |
+| `_GL_SMOOTH_ORDER` | 2 | Savitzky-Golay polynomial order |
+| `_GL_MIN_CONTACTS_TOTAL` | 3 | Fewer than this → global-min fallback |
+
+**Reading the log**:
+- `ground_lock contact-based: N/M frames with contact, offset range=[+x, +y]` — healthy run. If N is tiny relative to M, accuracy degrades.
+- `ground_lock fallback (N/M contact frames < 3): global min correction=±x` — not enough contact frames, fell back to the simple algorithm. Expected for pure in-air clips.
 
 ## Developer guide: adding new blend shapes
 
