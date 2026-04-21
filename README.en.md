@@ -43,6 +43,29 @@ Based on Meta's **SAM 3D Body** + **Momentum Human Rig (MHR)**; both libraries a
 - ComfyUI already installed (Python 3.11 recommended)
 - Windows / Linux / macOS (tested on Windows 11 + Python 3.11)
 - **Blender 4.1 or newer** (needed by some features — see below)
+- NVIDIA GPU (CUDA) strongly recommended — see VRAM requirements below
+
+### GPU / VRAM requirements
+
+SAM 3D Body keeps ~3.4 GB of weights resident on the GPU; inference activations stay under 100 MB, so this is a relatively lightweight model. Measurements taken on an RTX A6000 (1024×1024 input, single-person scene):
+
+| Metric | `full` inference | `body` inference |
+|---|---:|---:|
+| Model weights (resident) | 3,374 MB | 3,374 MB |
+| Inference activation (extra) | +93 MB | +69 MB |
+| **Overall peak VRAM** | **~3.5 GB** | ~3.5 GB |
+| First inference time | 3.06 s | 1.47 s |
+| Warm inference time | 1.13 s | 0.27 s |
+
+**Recommended specs:**
+
+| Use case | Recommended VRAM | Examples |
+|---|---|---|
+| **Absolute minimum** (this plugin alone) | **4 GB** | GTX 1650 |
+| **Comfortable** (alongside the OS and other processes) | **6 GB** | RTX 3050 / 4060 |
+| **Sharing ComfyUI with other models** (SDXL / Qwen-Image-Edit etc.) | **8 GB+** | RTX 3060 12GB / 4070 (depends on the other model) |
+
+> The model is cached at module scope (`_MODEL_CACHE`), so re-running the node does not allocate additional VRAM. CPU inference works but is much slower; CUDA is strongly recommended.
 
 ### ⚠ Features that require Blender
 
