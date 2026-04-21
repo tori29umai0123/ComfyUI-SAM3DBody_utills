@@ -1316,7 +1316,7 @@ class SAM3DBodyRenderFromJson:
         SHAPE_SLIDER_SIGN = (
             +1,  # 0 body_fat
             -1,  # 1 body_muscle: flip so +=muscular, -=slim (README semantics)
-            +1,  # 2 body_fat_muscle
+            -1,  # 2 body_fat_muscle: flip so +=fatter / -=leaner-muscular
             +1,  # 3 body_limb_girth
             -1,  # 4 body_limb_muscle: flip so +=muscular limbs
             +1,  # 5 body_limb_fat
