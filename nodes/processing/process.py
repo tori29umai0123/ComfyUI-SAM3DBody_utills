@@ -1165,6 +1165,13 @@ class SAM3DBodyRenderFromJson:
             "offset_x":     ("FLOAT", {"default": 0.0, "min": -5.0, "max": 5.0, "step": 0.01}),
             "offset_y":     ("FLOAT", {"default": 0.0, "min": -5.0, "max": 5.0, "step": 0.01}),
             "scale_offset": ("FLOAT", {"default": 1.0, "min": 0.1, "max": 5.0, "step": 0.01}),
+            # Orbit camera around the subject (always pointing at it).
+            # camera_yaw_deg:   horizontal orbit. + = camera moves to the
+            #                   viewer's right (subject appears to turn left).
+            # camera_pitch_deg: vertical orbit. + = camera moves up (looking
+            #                   down at the subject); - = looking up.
+            "camera_yaw_deg":   ("FLOAT", {"default": 0.0, "min": -180.0, "max": 180.0, "step": 1.0}),
+            "camera_pitch_deg": ("FLOAT", {"default": 0.0, "min": -89.0,  "max": 89.0,  "step": 1.0}),
             "width":        ("INT",   {"default": 0,   "min": 0,    "max": 8192}),
             "height":       ("INT",   {"default": 0,   "min": 0,    "max": 8192}),
             # Body (MHR 45-dim PCA, first 9 axes)
@@ -1201,6 +1208,7 @@ class SAM3DBodyRenderFromJson:
 
     def render(self, model, pose_json, preset="none",
                      offset_x=0.0, offset_y=0.0, scale_offset=1.0,
+                     camera_yaw_deg=0.0, camera_pitch_deg=0.0,
                      width=1024, height=1024,
                      body_fat=0.0, body_muscle=0.0, body_fat_muscle=0.0,
                      body_limb_girth=0.0, body_limb_muscle=0.0, body_limb_fat=0.0,
@@ -1513,6 +1521,36 @@ class SAM3DBodyRenderFromJson:
         s = float(scale_offset)
         if abs(s) > 1e-6:
             camera[2] /= s
+
+        # Orbit camera around the MHR mesh center. Rather than moving the
+        # camera (which would also require updating the look direction),
+        # rotate the vertices around the subject centroid by the inverse
+        # rotation. Because the renderer flips Y/Z internally, the rotation
+        # matrix is built in MHR-native frame (before the flip):
+        #   yaw  > 0 → camera moves to viewer's right → R_y(-yaw_rad)
+        #   pitch> 0 → camera moves up (looks down)   → R_x(+pitch_rad)
+        # Composition is pitch * yaw (turntable: yaw around world up first,
+        # then pitch tilts), applied to the vertex offset from the centroid.
+        # The framing (camera distance, scale) is preserved because the
+        # centroid is invariant under this rotation.
+        yaw_rad = float(np.deg2rad(camera_yaw_deg))
+        pitch_rad = float(np.deg2rad(camera_pitch_deg))
+        if abs(yaw_rad) > 1e-6 or abs(pitch_rad) > 1e-6:
+            cos_y, sin_y = np.cos(yaw_rad), np.sin(yaw_rad)
+            R_yaw_mhr = np.array(
+                [[ cos_y, 0.0, -sin_y],
+                 [   0.0, 1.0,    0.0],
+                 [ sin_y, 0.0,  cos_y]], dtype=np.float32,
+            )
+            cos_p, sin_p = np.cos(pitch_rad), np.sin(pitch_rad)
+            R_pitch_mhr = np.array(
+                [[1.0,   0.0,    0.0],
+                 [0.0, cos_p, -sin_p],
+                 [0.0, sin_p,  cos_p]], dtype=np.float32,
+            )
+            R_orbit = (R_pitch_mhr @ R_yaw_mhr).astype(np.float32)
+            O_mhr = np.array([mhr_cx, mhr_cy, mhr_cz], dtype=np.float32)
+            vertices = (vertices - O_mhr) @ R_orbit.T + O_mhr
 
         rendered_bgr = _render_mesh_software(
             vertices=vertices,

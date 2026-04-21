@@ -276,11 +276,20 @@ Takes the pose estimated from an input image (`pose_json`) and renders it onto t
 | model | — | — | From the Load node |
 | pose_json | `"{}"` | — | From the Process Image to Pose JSON node |
 | preset | `autosave` | preset dropdown | `autosave` is pinned to the top as the default. Selecting a preset writes its values into the sliders (via the frontend extension) |
-| offset_x | 0.0 | −5.0 … 5.0 | Horizontal camera offset (meters, added to `camera[0]`) |
-| offset_y | 0.0 | −5.0 … 5.0 | Vertical camera offset |
+| offset_x | 0.0 | −5.0 … 5.0 | Horizontal camera offset (meters, added to `camera[0]`). **Pans the subject left/right within the image** |
+| offset_y | 0.0 | −5.0 … 5.0 | Vertical camera offset. **Pans the subject up/down within the image** |
 | scale_offset | 1.0 | 0.1 … 5.0 | Camera distance multiplier. 1.0 = as-is, 0.1 = zoom in, 5.0 = zoom out |
+| camera_yaw_deg | 0.0 | −180 … 180 | **Horizontal orbit** around the subject centroid. `+` moves the camera to the viewer's right (subject appears to turn left). `±180` = back view |
+| camera_pitch_deg | 0.0 | −89 … 89 | **Vertical orbit** around the subject centroid. `+` moves the camera up (looking **down** at the subject), `−` looks **up**. The subject stays centered in the frame |
 | width | 0 | 0 … 8192 | Output width (0 → pose_json's original image size) |
 | height | 0 | 0 … 8192 | Output height (same) |
+
+> **How the camera controls compose**
+> - `camera_yaw_deg` / `camera_pitch_deg`: orbit the camera around the subject centroid (subject stays centered, only its orientation changes).
+> - `offset_x` / `offset_y`: shift the rendered subject in image space (move it off-center).
+> - `scale_offset`: dolly the camera in/out (zoom).
+>
+> The three groups are independent knobs that can be combined freely. Defaults (yaw=0, pitch=0) reproduce the previous behavior exactly.
 
 ### Optional inputs
 
