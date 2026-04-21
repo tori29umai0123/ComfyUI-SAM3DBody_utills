@@ -332,7 +332,7 @@ Implemented in `_apply_bone_length_scales` (`nodes/processing/process.py`). We s
 
 ### Blend shapes — `bs_*`
 
-18 sliders driven by the shape keys of `tools/bone_backup/all_parts_bs.fbx`. Linearly blended into the posed mesh. Each slider defaults to **0.0** and runs **0.0 … 1.0**; combining multiple sliders is additive.
+20 sliders driven by the shape keys of `tools/bone_backup/all_parts_bs.fbx`. Linearly blended into the posed mesh. Each slider defaults to **0.0** and runs **0.0 … 1.0**; combining multiple sliders is additive.
 
 Discovery is automatic — `process.py` reads names from `presets/face_blendshapes.npz` at startup, so adding a new shape in Blender and re-extracting will surface it in the UI on the next reload. The `bs_` prefix is purely a UI label; on-disk preset JSONs and the FBX itself use the bare name.
 
@@ -384,6 +384,12 @@ Discovery is automatic — `process.py` reads names from `presets/face_blendshap
 | bs_limb_thin  | Thinner limbs |
 | bs_hand_big   | Bigger hands |
 | bs_foot_big   | Bigger feet |
+
+#### Muscle
+
+| Slider | Effect |
+|---|---|
+| bs_MuscleScale | Bulk up full-body muscle (macho) |
 
 ### Outputs
 

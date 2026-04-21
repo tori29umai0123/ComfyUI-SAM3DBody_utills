@@ -139,6 +139,8 @@ _UI_BLENDSHAPE_ORDER = (
     "waist_slim",
     # limbs
     "limb_thick", "limb_thin", "hand_big", "foot_big",
+    # other
+    "MuscleScale",
 )
 
 

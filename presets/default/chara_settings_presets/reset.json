@@ -17,6 +17,7 @@
     "leg": 1.0
   },
   "blendshapes": {
+    "MuscleScale": 0.0,
     "breast_flat": 0.0,
     "breast_full": 0.0,
     "chest_slim": 0.0,
