@@ -191,21 +191,25 @@ Workflow:
 
 ## License
 
-This project uses a **multi-license structure**. License files live in `docs/licenses/`.
+This project uses a **multi-license structure**. The "what is under which license" split is the following three regions. Full license texts live in `docs/licenses/`.
 
-- **Wrapper code** (ComfyUI integration): **MIT** — [LICENSE-MIT](docs/licenses/LICENSE-MIT)
-- **SAM 3D Body library** (vendored under `sam_3d_body/`): **SAM License** — [LICENSE-SAM](docs/licenses/LICENSE-SAM)
-- **Momentum Human Rig** (`mhr_model.pt` + mesh topology used for blend-shape authoring): **Apache 2.0** — [LICENSE-MHR](docs/licenses/LICENSE-MHR) + [NOTICE-MHR](docs/licenses/NOTICE-MHR)
+| Region | Files / assets | License | Copyright |
+|---|---|---|---|
+| **Our wrapper code** (ComfyUI integration) | `nodes/` (excluding `nodes/sam_3d_body/`), `tools/`, `web/`, `install.py`, `__init__.py`, `prestartup_script.py`, and other ComfyUI integration code | **MIT License** <br>([LICENSE-MIT](docs/licenses/LICENSE-MIT)) | Copyright (c) 2025 Andrea Pozzetti (upstream) |
+| **SAM part** (Meta SAM 3D Body itself) | Vendored library under `nodes/sam_3d_body/` (model + inference code) | **SAM License** <br>([LICENSE-SAM](docs/licenses/LICENSE-SAM)) | Copyright (c) Meta Platforms, Inc. and affiliates |
+| **MHR part** (Momentum Human Rig + derived data) | `mhr_model.pt` asset, and data authored against MHR topology: `presets/face_blendshapes.npz`, per-object vertex JSONs in `presets/`, `tools/bone_backup/all_parts_bs.fbx` | **Apache License 2.0** <br>([LICENSE-MHR](docs/licenses/LICENSE-MHR) / [NOTICE-MHR](docs/licenses/NOTICE-MHR)) | Copyright (c) Meta Platforms, Inc. and affiliates |
 
-See [LICENSE](docs/licenses/LICENSE) and [THIRD_PARTY_NOTICES](docs/licenses/THIRD_PARTY_NOTICES).
+> Notes: **This fork's own changes are added under the same MIT** — the MIT copyright line still credits upstream (Andrea Pozzetti). For MHR, Apache 2.0 covers not just the bundled asset but **any data we authored against MHR's mesh topology** (blend-shape deltas, per-object vertex JSONs), which are derivative works of MHR.
+
+See [LICENSE](LICENSE) for the top-level summary and [THIRD_PARTY_NOTICES](docs/licenses/THIRD_PARTY_NOTICES) for third-party attributions.
 
 ### Summary
 
-- ✅ Wrapper code is free under MIT
-- ✅ SAM 3D Body is usable commercially under the SAM License
-- ✅ MHR-derived assets (our npz deltas + region JSONs) are Apache 2.0 compatible with commercial use
-- ⚠ When redistributing, ship LICENSE-MIT + LICENSE-SAM + LICENSE-MHR + NOTICE-MHR
-- ⚠ Contracted blend-shape authoring against the MHR topology: the contractor's output is a derivative work under Apache 2.0 — keep the MHR attribution
+- ✅ Wrapper code is free to use, modify, and redistribute under MIT
+- ✅ SAM 3D Body is usable for research and commercial purposes under the SAM License
+- ✅ MHR (and any blend-shape / region data derived from its topology) is usable commercially under Apache 2.0
+- ⚠ When redistributing, ship **LICENSE-MIT + LICENSE-SAM + LICENSE-MHR + NOTICE-MHR**
+- ⚠ If you contract out blend-shape authoring against the MHR topology, the contractor's output is a derivative work under Apache 2.0 — keep the MHR attribution in any deliverable that ships the mesh or its deltas
 - ⚠ Acknowledge SAM 3D Body in publications (required by the SAM License)
 
 ## Community
