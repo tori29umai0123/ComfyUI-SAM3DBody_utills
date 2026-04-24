@@ -28,6 +28,7 @@ from .process import (
     _apply_face_blendshapes,
     _apply_bone_length_scales,
     _to_batched_tensor,
+    apply_pose_lean_correction_rig,
 )
 from .export_rigged import (
     _KNOWN_JOINT_NAMES,
@@ -324,6 +325,12 @@ class SAM3DBodyExportAnimatedFBX:
                                "リグは basic pose (body_pose=0) で生成され、"
                                "フレームごとに関節回転のみキーフレーム化される。",
                 }),
+                "pose_adjust": ("FLOAT", {
+                    "default": 0.0, "min": 0.0, "max": 1.0, "step": 0.01,
+                    "tooltip": "前かがみ補正の強さ (0=補正なし, 1=強め)。\n"
+                               "背骨 / 頸 / 頭を後ろに反らせて、推定ポーズが"
+                               "前のめりになっている分を打ち消す。",
+                }),
                 "fps": ("FLOAT", {
                     "default": 30.0, "min": 1.0, "max": 240.0, "step": 1.0,
                     "tooltip": "出力アニメーションのフレームレート。",
@@ -367,7 +374,7 @@ class SAM3DBodyExportAnimatedFBX:
     FUNCTION = "export"
     CATEGORY = "SAM3DBody/export"
 
-    def export(self, model, images, character_json, fps,
+    def export(self, model, images, character_json, pose_adjust, fps,
                bbox_threshold, inference_type,
                blender_exe, output_filename,
                root_motion_mode="auto_ground_lock",
@@ -379,6 +386,11 @@ class SAM3DBodyExportAnimatedFBX:
             print(f"[SAM3DBody] unknown root_motion_mode '{root_motion_mode}', "
                   f"falling back to 'auto_ground_lock'")
             root_motion_mode = "auto_ground_lock"
+
+        try:
+            lean_strength = float(pose_adjust)
+        except (TypeError, ValueError):
+            lean_strength = 0.0
 
         try:
             preset = json.loads(character_json) if character_json.strip() else {}
@@ -581,6 +593,14 @@ class SAM3DBodyExportAnimatedFBX:
                 )
             posed_rots, posed_coords = _unpack_batched(posed_out[1:])
             posed_rots = posed_rots.astype(np.float32)
+            pc = np.asarray(posed_coords, dtype=np.float32) if posed_coords is not None else None
+            # Lean correction: bend the spine→neck chain backwards so the
+            # exported rig / ground-lock both see the straightened pose.
+            # Mirror SAM3DBodyExportAnimatedBVH's behaviour.
+            if lean_strength > 1e-6 and pc is not None:
+                posed_rots, pc = apply_pose_lean_correction_rig(
+                    posed_rots, pc, parents, lean_strength,
+                )
             last_good_pose = posed_rots
             frames_posed_rots.append(posed_rots)
 
@@ -589,8 +609,7 @@ class SAM3DBodyExportAnimatedFBX:
             # needed so the solver can reason about foot motion in both
             # pose space (for Y threshold) and world space (for stillness
             # detection, once trans is layered on).
-            if posed_coords is not None:
-                pc = np.asarray(posed_coords, dtype=np.float32)
+            if pc is not None:
                 feet_pos = np.stack([
                     pc[_FOOT_JOINT_L],
                     pc[_FOOT_JOINT_R],

@@ -359,9 +359,10 @@
         }
       ],
       "properties": {
-        "cnr_id": "comfyui-sam3dbody_utills",
+        "aux_id": "tori29umai0123/ComfyUI-SAM3DBody_utills",
         "ver": "0.2.1",
-        "Node name for S&R": "LoadSAM3DBodyModel"
+        "Node name for S&R": "LoadSAM3DBodyModel",
+        "cnr_id": "comfyui-sam3dbody_utills"
       },
       "widgets_values": [
         "Auto"
@@ -415,113 +416,14 @@
         }
       ],
       "properties": {
-        "cnr_id": "comfyui-sam3dbody_utills",
+        "aux_id": "tori29umai0123/ComfyUI-SAM3DBody_utills",
         "ver": "0.2.1",
-        "Node name for S&R": "SAM3DBodyProcessToJson"
+        "Node name for S&R": "SAM3DBodyProcessToJson",
+        "cnr_id": "comfyui-sam3dbody_utills"
       },
       "widgets_values": [
         0.8,
         "full"
-      ]
-    },
-    {
-      "id": 124,
-      "type": "SAM3DBodyRenderFromJson",
-      "pos": [
-        863.5512918187882,
-        -750.2589637978243
-      ],
-      "size": [
-        462.15,
-        966
-      ],
-      "flags": {},
-      "order": 7,
-      "mode": 0,
-      "inputs": [
-        {
-          "name": "model",
-          "type": "SAM3D_MODEL",
-          "link": 426
-        },
-        {
-          "name": "background_image",
-          "shape": 7,
-          "type": "IMAGE",
-          "link": 427
-        },
-        {
-          "name": "pose_json",
-          "type": "STRING",
-          "widget": {
-            "name": "pose_json"
-          },
-          "link": 428
-        }
-      ],
-      "outputs": [
-        {
-          "name": "image",
-          "type": "IMAGE",
-          "links": [
-            430,
-            432
-          ]
-        },
-        {
-          "name": "settings_json",
-          "type": "STRING",
-          "links": [
-            443
-          ]
-        }
-      ],
-      "properties": {
-        "cnr_id": "comfyui-sam3dbody_utills",
-        "ver": "0.2.1",
-        "Node name for S&R": "SAM3DBodyRenderFromJson"
-      },
-      "widgets_values": [
-        "{}",
-        "male",
-        0,
-        0,
-        1,
-        0.0,
-        0.0,
-        0,
-        0,
-        -1,
-        0,
-        0,
-        0,
-        0.5,
-        0,
-        0.5,
-        -0.5,
-        0,
-        1,
-        1,
-        1,
-        1,
-        0,
-        0,
-        0,
-        0.5,
-        0,
-        0,
-        0,
-        0,
-        1,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0
       ]
     },
     {
@@ -570,9 +472,9 @@
           "fov": 75,
           "state": {
             "position": {
-              "x": 3.9120970928716092,
-              "y": 6.711651323042565,
-              "z": 3.9119489850960947
+              "x": 3.227551241100614,
+              "y": 5.974688928231873,
+              "z": 3.22742904949255
             },
             "target": {
               "x": 0,
@@ -647,15 +549,120 @@
         }
       ],
       "properties": {
-        "cnr_id": "comfyui-sam3dbody_utills",
+        "aux_id": "tori29umai0123/ComfyUI-SAM3DBody_utills",
         "ver": "0.2.1",
-        "Node name for S&R": "SAM3DBodyExportRiggedFBX"
+        "Node name for S&R": "SAM3DBodyExportRiggedFBX",
+        "cnr_id": "comfyui-sam3dbody_utills"
       },
       "widgets_values": [
         "{\n  \"_slot\": \"=== CHARACTER JSON ===\",\n  \"_hint\": \"Paste Render node's settings_json output here.\",\n  \"body_params\":   {},\n  \"bone_lengths\":  {},\n  \"blendshapes\":   {}\n}",
         "{\n  \"_slot\": \"=== POSE JSON ===\",\n  \"_hint\": \"Paste Process Image to Pose JSON output here.\",\n  \"body_pose_params\": null,\n  \"hand_pose_params\": null,\n  \"global_rot\":       null\n}",
         "C:/Program Files/Blender Foundation/Blender 4.1/blender.exe",
         "sam3d_rigged.fbx"
+      ]
+    },
+    {
+      "id": 124,
+      "type": "SAM3DBodyRenderFromJson",
+      "pos": [
+        863.5512918187882,
+        -750.2589637978243
+      ],
+      "size": [
+        462.15,
+        1086
+      ],
+      "flags": {},
+      "order": 7,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "model",
+          "type": "SAM3D_MODEL",
+          "link": 426
+        },
+        {
+          "name": "background_image",
+          "shape": 7,
+          "type": "IMAGE",
+          "link": 427
+        },
+        {
+          "name": "pose_json",
+          "type": "STRING",
+          "widget": {
+            "name": "pose_json"
+          },
+          "link": 428
+        }
+      ],
+      "outputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "links": [
+            430,
+            432
+          ]
+        },
+        {
+          "name": "settings_json",
+          "type": "STRING",
+          "links": [
+            443
+          ]
+        }
+      ],
+      "properties": {
+        "aux_id": "tori29umai0123/ComfyUI-SAM3DBody_utills",
+        "ver": "0.2.1",
+        "Node name for S&R": "SAM3DBodyRenderFromJson",
+        "cnr_id": "comfyui-sam3dbody_utills"
+      },
+      "widgets_values": [
+        "{}",
+        "female",
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        -0.5,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0.9,
+        0.9,
+        1,
+        1,
+        0.03,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0.5,
+        0.3,
+        0.3,
+        0,
+        0.4,
+        0,
+        0.9,
+        0.5,
+        0.5,
+        0,
+        0,
+        0,
+        0,
+        0
       ]
     }
   ],
@@ -809,10 +816,10 @@
   "config": {},
   "extra": {
     "ds": {
-      "scale": 1.4864362802414874,
+      "scale": 0.3914251301220557,
       "offset": [
-        -944.348666102363,
-        -39.55766441132431
+        2173.900681786182,
+        2213.3477018029635
       ]
     },
     "frontendVersion": "1.42.8",

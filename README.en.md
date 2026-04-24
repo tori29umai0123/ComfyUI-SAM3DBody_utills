@@ -33,6 +33,8 @@ https://github.com/user-attachments/assets/4fa43a56-8dd2-4ebf-8abe-61a31ff14e6f
 3. **SAM 3D Body: Render Human From Pose JSON** — renders an MHR neutral body in the estimated pose, with full slider control over body shape, bone length, and FBX-sourced blend shapes.
 4. **SAM 3D Body: Export Rigged FBX** — writes an armature + skinned mesh + posed animation FBX to `<ComfyUI>/output/`. (Blender required)
 5. **SAM 3D Body: Export Animated FBX** — writes an animated FBX baked from a video (IMAGE batch). The character is rigged once at the rest pose, then every frame becomes a keyframe. (Blender required)
+6. **SAM 3D Body: Export Posed BVH** — writes a single-pose humanoid-compatible BVH to `<ComfyUI>/output/`. (Blender required)
+7. **SAM 3D Body: Export Animated BVH** — writes an animated BVH from a video (IMAGE batch) or a supplied pose array. (Blender required)
 
 Based on Meta's **SAM 3D Body** + **Momentum Human Rig (MHR)**; both libraries are vendored under their original licenses. See the [License](#license) section.
 
@@ -76,6 +78,8 @@ The following features spawn `blender.exe` as a subprocess and will not work wit
 | **Adding / editing blend shapes** | Edit shape keys on `tools/bone_backup/all_parts_bs.fbx` in the Blender GUI, then re-run `tools/extract_face_blendshapes.py` headless to rebuild `presets/face_blendshapes.npz` |
 | **`SAM 3D Body: Export Rigged FBX` node** | Calls `blender.exe --background --python tools/build_rigged_fbx.py` internally to build the armature, weld skin weights to vertex groups, and write the FBX |
 | **`SAM 3D Body: Export Animated FBX` node** | Calls `blender.exe --background --python tools/build_animated_fbx.py` internally to bake per-frame rotation keyframes from the input video and write the animated FBX |
+| **`SAM 3D Body: Export Posed BVH` node** | Calls `blender.exe --background --python tools/build_rigged_bvh.py` internally to build and export a single-pose BVH |
+| **`SAM 3D Body: Export Animated BVH` node** | Calls `blender.exe --background --python tools/build_animated_bvh.py` internally to bake and export an animated BVH |
 
 **When Blender is not required:** if you only want to render existing characters in ComfyUI using the shipped 18 blend shapes and bundled presets (the `Load → ProcessToJson → Render` chain of three nodes), Blender does not need to be installed at all.
 
@@ -114,20 +118,7 @@ C:/ComfyUI/.venv/Scripts/python.exe install.py
 
 #### 3. Place the SAM 3D Body model weights
 
-Usually the auto-downloader takes care of this. For manual placement:
-
-1. Download from [jetjodh/sam-3d-body-dinov3](https://huggingface.co/jetjodh/sam-3d-body-dinov3)
-2. Lay them out as:
-
-   ```
-   C:/ComfyUI/models/sam3dbody/
-   ├── model.ckpt              (SAM 3D Body checkpoint, ~1.3 GB)
-   ├── model_config.yaml       (model config)
-   └── assets/
-       └── mhr_model.pt        (Momentum Human Rig, ~200 MB)
-   ```
-
-The folder is fixed at `<ComfyUI>/models/sam3dbody/` and derived from `folder_paths.models_dir`, so any `extra_model_paths.yaml` override to the models dir is followed automatically.
+Usually the auto-downloader takes care of this on first launch.
 
 #### 4. Verify startup
 
@@ -222,30 +213,6 @@ For SAM 3D Body / MHR core topics and upstream plugin chat, see the [PozzettiAnd
 
 This plugin bundles its blend-shape definitions, vertex mapping, and character preset JSONs into a single unit called a **preset pack**. The pack system exists so users can author their own blend-shape sets and share them with others as self-contained folders.
 
-### Directory layout
-
-```
-ComfyUI-SAM3DBody_utills/
-├── active_preset.ini                    ← selects which pack is active
-└── presets/
-    └── default/                         ← bundled default pack
-        ├── face_blendshapes.npz
-        ├── mhr_reference_vertices.json
-        └── chara_settings_presets/
-            ├── autosave.json
-            ├── chibi.json
-            ├── female.json
-            ├── male.json
-            └── reset.json
-```
-
-`active_preset.ini` content:
-
-```ini
-[active]
-pack = default
-```
-
 ### Switching packs
 
 To use a pack someone else shared (say `my_custom_pack`):
@@ -269,13 +236,15 @@ A pack is fully self-contained — the recipient just unzips it under `presets/`
 
 ## Example workflows
 
-Four ready-made workflows ship under `workflows/`. Load them from ComfyUI's `Workflow → Open` menu. The bundled `workflows/input_image*.png` / `workflows/input_mask*.png` work as drop-in test inputs.
+Six ready-made workflows ship under `workflows/`. Load them from ComfyUI's `Workflow → Open` menu. The bundled `workflows/input_image*.png` / `workflows/input_mask*.png` work as drop-in test inputs.
 
 | File | What it does | Needs Blender |
 |---|---|---|
 | **`SAM3Dbody_image.json`** | Minimal image-rendering workflow. Takes the pose from your input image and renders it onto an arbitrary body shape. | ❌ |
 | **`SAM3Dbody_FBX.json`** | FBX export workflow. Takes the pose from your input image, applies it to an arbitrary body shape, and exports a rigged FBX with a posed animation track — importable into Unity / Unreal Engine. | ✅ |
 | **`SAM3Dbody_FBXAnimation.json`** | **Video motion-capture workflow.** Pipes a video loaded via `VHS_LoadVideo` into `SAM 3D Body: Export Animated FBX` and writes an animated FBX covering every frame. | ✅ |
+| **`SAM3Dbody_ BVH.json`** | BVH export workflow. Takes the pose from your input image, applies it to an arbitrary body shape, and exports a single-pose BVH. No 3D preview node is included. | ✅ |
+| **`SAM3Dbody_BVHAnimation.json`** | **Video motion-capture BVH workflow.** Pipes a video loaded via `VHS_LoadVideo` into `SAM 3D Body: Export Animated BVH` and writes an animated BVH covering every frame. No 3D preview node is included. | ✅ |
 | **`SAM3Dbody _QIE_VNCCSpose.json`** | A real-world usage example. Combines [Qwen-Image-Edit-2511](https://huggingface.co/Qwen/Qwen-Image-Edit) + the VNCCSpose LoRA: extract the pose from a reference character of a different body shape, render it onto an arbitrary 3D character body, then image-edit the result. | ❌ |
 
 ### How `SAM3Dbody _QIE_VNCCSpose.json` fits together
@@ -487,31 +456,7 @@ Writes a rigged FBX (**armature + skinned mesh + 30-frame static pose animation*
      - Keyframes at frame 1 and frame 30 so the clip has non-zero duration (Unity treats zero-length clips as empty)
      - FBX export (`axis_forward=-Z / axis_up=Y`, `add_leaf_bones=False`, `bake_anim=True`, `bake_anim_force_startend_keying=True`)
 
-### Example workflow
-
-```
-LoadImage ──► SAM 3D Body: Process Image to Pose JSON ──► [pose_json]
-                                                           │
-LoadSAM3DBodyModel ──┬────────────────────────────────────┼──► model
-                     │                                     │
-                     └──► SAM 3D Body: Render ... ─► settings_json ─► [character_json]
-                                                                        │
-                                                SAM 3D Body: Export Rigged FBX
-                                                                        │
-                                                             <ComfyUI>/output/*.fbx
-```
-
 Tweak the Render node until the preview looks right, pipe its `settings_json` into Export Rigged FBX, and you get a rigged FBX matching exactly what you saw in the preview.
-
-### Output FBX layout
-
-| Piece | Details |
-|---|---|
-| Armature | ~112 bones (127 MHR joints minus 15 weightless leaves). Rest pose = MHR rest, bone rest orientations match MHR bind rotations |
-| Mesh | 18439 verts at rest pose, with `character_json`'s shape / blend shape / bone length changes baked in |
-| Vertex groups + armature modifier | One vertex group per bone, populated with the MHR LBS weights. Skinning just works when opened in Blender / Unity / UE |
-| Animation | One Action (`SAM3D_Armature|Scene`), full-range (frame 1..30) static pose. Plays cleanly in the Unity Timeline |
-| Axes | File on disk: Y-up / -Z-forward (Unity/UE default). Blender internal build is Z-up; the exporter does the axis swap on write (we do NOT use `bake_space_transform` — it would cause a second swap) |
 
 ### Notes
 
@@ -528,57 +473,6 @@ See the [demo video](#3-export-motion-captured-fbx-from-a-video) (`docs/sample1.
 
 > **Blender 4.1+ required.** The node spawns `blender.exe --background --python tools/build_animated_fbx.py` as a subprocess to build the armature, bind the LBS weights, write per-frame keyframes, and export the FBX.
 
-### Inputs
-
-| Parameter | Default | Notes |
-|---|---|---|
-| model | — | From the Load node |
-| **images** | — | **Video frames** (IMAGE batch). Wire up `VHS_LoadVideo` or any other batched IMAGE source. The `[B,H,W,C]` tensor's B axis is the total number of frames. |
-| **character_json** | placeholder | Character JSON. Wire the Render node's `settings_json` output or paste a preset. The rig is built **once at the rest pose (body_pose = 0)**; every frame is keyframed onto that shared rig. |
-| fps | 30.0 | Animation frame rate. Written to `scene.render.fps`. |
-| bbox_threshold | 0.8 | Person-detection confidence threshold (per frame). |
-| inference_type | `full` | `full` / `body` / `hand` (same meaning as on Process Image to Pose JSON). |
-| **root_motion_mode** | `auto_ground_lock` | Vertical-root correction mode (see [details](#root-motion-correction-root_motion_mode)). One of `auto_ground_lock` / `free` / `xz_only`. |
-| blender_exe | `C:/Program Files/Blender Foundation/Blender 4.1/blender.exe` | Path to `blender.exe`. |
-| output_filename | `sam3d_animated.fbx` | Output FBX name under `<ComfyUI>/output/`. Leave blank for a timestamped name. |
-| masks (optional) | — | Per-frame segmentation masks. Used only if the mask count matches the frame count. |
-
-### Outputs
-
-| Output | Notes |
-|---|---|
-| fbx_path | Absolute path of the written FBX (`<ComfyUI>/output/<name>.fbx`) |
-
-### How it works
-
-1. **Python side**
-   - Expands `character_json` and builds **the character's rest mesh + rest skeleton** once, using the same logic as `Export Rigged FBX`. This is the bind pose for the whole animation.
-   - Splits `images` into single frames, runs `SAMBody3DEstimator.process_one_image` per frame to get `body_pose_params` / `hand_pose_params` / `global_rot`.
-   - Re-runs `mhr_forward` with the character's fixed shape params so the posed joint rotations `[J,3,3]` stay shape-consistent across frames.
-   - If no person is detected on a frame, the **previous good pose is reused** so the clip stays contiguous (the very first frame falls back to the rest pose).
-   - Prunes weightless leaf joints (same policy as `Export Rigged FBX`) and dumps all frame rotations + rig data to a temp JSON.
-2. **Blender (subprocess)**
-   - Reconstructs the armature + mesh + LBS weights at the rest pose, identical to `build_rigged_fbx.py`.
-   - Sets `scene.frame_start = 1 / frame_end = N / render.fps = fps`.
-   - For every frame, computes each bone's local delta rotation from the math and keyframes `pose_bone.rotation_quaternion` (location / scale stay at 0 / 1).
-   - Exports the FBX (`bake_anim=True`, `axis_forward=-Z`, `axis_up=Y`).
-
-### Example wiring
-
-```
-VHS_LoadVideo (sample1.mp4) ──► images
-                                  │
-LoadSAM3DBodyModel ──┬────────────┤
-                     │            │
-LoadImage ──► Process ── Render ─► settings_json ─► character_json
-                     │            │
-                     └──► SAM 3D Body: Export Animated FBX
-                                  │
-                       <ComfyUI>/output/sam3d_animated.fbx
-```
-
-The bundled `workflows/SAM3Dbody_FBXAnimation.json` ships this exact wiring.
-
 ### Importing into Unity
 
 - The FBX is written **Y-up / -Z-forward**, so dropping it into Unity orients it correctly.
@@ -594,51 +488,65 @@ The bundled `workflows/SAM3Dbody_FBXAnimation.json` ships this exact wiring.
 - **Root translation and rotation are keyframed** — the node reads the per-frame `pred_cam_t` (subject position in camera space) estimated by SAM 3D Body, anchors it to the first detected frame so the clip starts at the origin, and bakes it onto the root bone's `location` F-Curve. Walking / turning / stepping forward in the source video reaches the FBX directly. This assumes a **static camera** in the source video — if the camera moves, the baked trajectory will be the *camera-relative* motion of the subject, not true world-space movement.
 - If the character floats above the ground (or sinks into it) while standing still, the `auto_ground_lock` default of `root_motion_mode` corrects it. See the next section.
 
-### Root motion correction (`root_motion_mode`)
+## ⚠ Export Posed BVH node (Blender required)
 
-`pred_cam_t` carries depth-estimation noise, absorbs camera tilt, and jitters frame-to-frame, so using it raw can make the character **float in mid-air or sink into the floor while standing still**. `root_motion_mode` picks the correction strategy.
+Writes a single-pose **BVH** to `<ComfyUI>/output/`. Use the same `settings_json` from the Render node and the same `pose_json` from Process Image to Pose JSON. The export is skeleton / motion only (no mesh), and the skeleton is reduced to a humanoid-compatible subset before writing.
 
-| Mode | Behaviour | Recommended for |
+> **Blender 4.1+ is required** — this node calls `blender.exe --background --python tools/build_rigged_bvh.py` as a subprocess.
+
+### Inputs
+
+| Parameter | Notes |
+|---|---|
+| **model** | Output of `Load SAM 3D Body Model` |
+| **character_json** | `settings_json` output from `SAM 3D Body: Render Human From Pose JSON` |
+| **pose_json** | `pose_json` output from `SAM 3D Body: Process Image to Pose JSON` |
+| blender_exe | Path to `blender.exe` |
+| output_filename | Output BVH name (default `sam3d_posed.bvh`) |
+
+### Outputs
+
+| Output | Notes |
+|---|---|
+| bvh_path | Absolute path of the written BVH (`<ComfyUI>/output/<name>.bvh`) |
+
+### Example workflow
+
+- `workflows/SAM3Dbody_ BVH.json`
+
+## ⚠ Export Animated BVH node (video motion capture, Blender required)
+
+Writes an animated **BVH** from a video (IMAGE batch). The basic flow matches `Export Animated FBX`: estimate a pose on every frame, then bake the whole sequence into one BVH. The output contains skeleton + motion only, with no mesh.
+
+You can also optionally pass `pose_json` as `{"frames": [pose, ...], "fps": 30}` (or a plain list of poses) for manual pose-sequence export.
+
+> **Blender 4.1+ is required** — this node calls `blender.exe --background --python tools/build_animated_bvh.py` as a subprocess.
+
+### Inputs
+
+| Parameter | Default | Notes |
 |---|---|---|
-| **`auto_ground_lock`** (default) | Per-frame contact detection — identifies which foot is on the ground at each moment, and applies a per-frame Y offset so that foot sits at the rest-pose ground level. Flight phases are filled in by interpolating the offset between the surrounding contact frames | Walking / running / jumping / one-foot balance / two-foot stance / dance — **essentially any mocap clip** |
-| **`free`** | Uses `pred_cam_t` as-is. No correction | Intermediate output when you plan to fix the root path in a DCC. Debugging |
-| **`xz_only`** | Drops the Y component entirely (horizontal motion only). Jumps are lost too | In-place animations — fighting-game idles / attacks where the animation loops and feet are IK-driven |
+| **model** | — | Output of `Load SAM 3D Body Model` |
+| **images** | — | Batched IMAGE tensor from `VHS_LoadVideo` or similar |
+| **character_json** | placeholder | `settings_json` output from the Render node |
+| **pose_adjust** | `0.0` | Lean-correction strength (0–1). Same behaviour as on `Export Animated FBX` — bends the spine → neck chain backwards. Leave at `0` for live-action, try ~`0.5` for illustrated / anime input. |
+| fps | `30.0` | Output BVH frame rate |
+| bbox_threshold | `0.8` | Person detection threshold |
+| inference_type | `full` | `full` / `body` / `hand` |
+| blender_exe | `C:/Program Files/Blender Foundation/Blender 4.1/blender.exe` | Path to `blender.exe` |
+| output_filename | `sam3d_animated.bvh` | Output BVH filename |
+| masks (optional) | — | Per-frame person masks, used only when the mask count matches |
+| pose_json (optional) | — | `{"frames": [...], "fps": 30}` or a plain pose array, for manual sequence export |
 
-**How `auto_ground_lock` works**:
+### Outputs
 
-1. Per frame, extract both feet's 3D position from `mhr_forward(global_trans=0)`
-2. **Contact detection** (per frame, per foot):
-   - Low (`pose_foot_y <= rest_foot_y + 15cm`, pose-frame = drift-free)
-   - Still (`|world Y velocity| <= 0.03m/frame`) — using WORLD velocity is what lets us correctly flag jump / flight frames as non-contact even though the pose-frame foot barely moves during a straight-body jump
-3. Hysteresis: a foot only counts as in contact if it passes both tests for at least 2 consecutive frames (debounces single-frame flicker)
-4. Per frame, if any foot is in contact, compute the offset needed to put its world Y at the rest-pose foot Y. Frames with no contact get a NaN offset, which is then linearly interpolated from surrounding contact frames
-5. Smooth the final offset curve with a Savitzky-Golay filter (window 5, order 2)
+| Output | Notes |
+|---|---|
+| bvh_path | Absolute path of the written BVH (`<ComfyUI>/output/<name>.bvh`) |
 
-**Scenario behaviour**:
+### Example workflow
 
-| Scenario | Contact-detection result | Outcome |
-|---|---|---|
-| Two-foot stance | Both feet in contact throughout | Flat offset, clip ground-locked |
-| One-foot balance | Only supporting foot passes (lifted foot fails the Y threshold) | Supporting foot anchored, lifted foot free |
-| Walking | Always at least one foot in contact (alternating + double support) | Smooth per-frame anchor |
-| Running | Contact during single-support phases, NaN during flight | Flight interpolated between surrounding contacts |
-| Jumping | Contact before takeoff and after landing only (world-velocity excludes flight) | Flight interpolated, jump height preserved as relative pose difference |
-| Pure flight clip | Zero contact frames | Fallback: global-min shift (equivalent to the old algorithm) |
-
-**Tunables (hardcoded constants in `nodes/processing/export_animated.py`)**:
-
-| Constant | Value | Meaning |
-|---|---|---|
-| `_GL_Y_THR` | 0.15 m | How far above `rest_foot_y` still counts as "low" |
-| `_GL_V_THR` | 0.03 m/frame | World Y-velocity cutoff (~0.9 m/s at 30 fps) |
-| `_GL_MIN_CONTACT_RUN` | 2 | Minimum consecutive contact frames (debouncing) |
-| `_GL_SMOOTH_WINDOW` | 5 | Savitzky-Golay window |
-| `_GL_SMOOTH_ORDER` | 2 | Savitzky-Golay polynomial order |
-| `_GL_MIN_CONTACTS_TOTAL` | 3 | Fewer than this → global-min fallback |
-
-**Reading the log**:
-- `ground_lock contact-based: N/M frames with contact, offset range=[+x, +y]` — healthy run. If N is tiny relative to M, accuracy degrades.
-- `ground_lock fallback (N/M contact frames < 3): global min correction=±x` — not enough contact frames, fell back to the simple algorithm. Expected for pure in-air clips.
+- `workflows/SAM3Dbody_BVHAnimation.json`
 
 ## Developer guide: adding new blend shapes
 

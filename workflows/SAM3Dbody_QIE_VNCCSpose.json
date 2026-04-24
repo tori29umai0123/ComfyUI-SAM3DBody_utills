@@ -1,8 +1,8 @@
 {
   "id": "d78b5b43-3e62-408f-bbc7-66e993ab6505",
   "revision": 0,
-  "last_node_id": 672,
-  "last_link_id": 1978,
+  "last_node_id": 673,
+  "last_link_id": 1984,
   "nodes": [
     {
       "id": 652,
@@ -92,7 +92,7 @@
           "name": "IMAGE",
           "type": "IMAGE",
           "links": [
-            1952
+            1980
           ]
         }
       ],
@@ -145,7 +145,7 @@
           "name": "pose_json",
           "type": "STRING",
           "links": [
-            1953
+            1981
           ]
         },
         {
@@ -155,9 +155,10 @@
         }
       ],
       "properties": {
-        "cnr_id": "comfyui-sam3dbody_utills",
+        "aux_id": "tori29umai0123/ComfyUI-SAM3DBody_utills",
         "ver": "0.2.1",
-        "Node name for S&R": "SAM3DBodyProcessToJson"
+        "Node name for S&R": "SAM3DBodyProcessToJson",
+        "cnr_id": "comfyui-sam3dbody_utills"
       },
       "widgets_values": [
         0.8,
@@ -375,7 +376,7 @@
         {
           "name": "images",
           "type": "IMAGE",
-          "link": 1972
+          "link": 1984
         }
       ],
       "outputs": [],
@@ -450,7 +451,7 @@
         }
       },
       "widgets_values": [
-        883525515603211,
+        461109113332153,
         "randomize",
         4,
         1,
@@ -687,7 +688,7 @@
         {
           "name": "image",
           "type": "IMAGE",
-          "link": 1955
+          "link": 1982
         }
       ],
       "outputs": [
@@ -748,7 +749,7 @@
           "name": "image1",
           "shape": 7,
           "type": "IMAGE",
-          "link": 1969
+          "link": 1983
         },
         {
           "name": "image2",
@@ -814,106 +815,6 @@
       ]
     },
     {
-      "id": 660,
-      "type": "SAM3DBodyRenderFromJson",
-      "pos": [
-        1796.6607728366737,
-        105.5883119710878
-      ],
-      "size": [
-        462.15,
-        990
-      ],
-      "flags": {},
-      "order": 13,
-      "mode": 0,
-      "inputs": [
-        {
-          "name": "model",
-          "type": "SAM3D_MODEL",
-          "link": 1951
-        },
-        {
-          "name": "background_image",
-          "shape": 7,
-          "type": "IMAGE",
-          "link": 1952
-        },
-        {
-          "name": "pose_json",
-          "type": "STRING",
-          "widget": {
-            "name": "pose_json"
-          },
-          "link": 1953
-        }
-      ],
-      "outputs": [
-        {
-          "name": "image",
-          "type": "IMAGE",
-          "links": [
-            1955,
-            1969,
-            1972
-          ]
-        },
-        {
-          "name": "settings_json",
-          "type": "STRING",
-          "links": []
-        }
-      ],
-      "properties": {
-        "cnr_id": "comfyui-sam3dbody_utills",
-        "ver": "0.2.1",
-        "Node name for S&R": "SAM3DBodyRenderFromJson"
-      },
-      "widgets_values": [
-        "{}",
-        "female",
-        0,
-        -0.1,
-        1,
-        0.0,
-        0.0,
-        0,
-        0,
-        -0.5,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0.9,
-        1.2,
-        1,
-        1,
-        0,
-        0,
-        0,
-        1,
-        0,
-        0,
-        0.5,
-        0.3,
-        0.3,
-        0,
-        0.4,
-        0,
-        0.5,
-        0.5,
-        0.5,
-        0,
-        0,
-        0,
-        0
-      ]
-    },
-    {
       "id": 655,
       "type": "LoadSAM3DBodyModel",
       "pos": [
@@ -934,14 +835,15 @@
           "type": "SAM3D_MODEL",
           "links": [
             1945,
-            1951
+            1979
           ]
         }
       ],
       "properties": {
-        "cnr_id": "comfyui-sam3dbody_utills",
+        "aux_id": "tori29umai0123/ComfyUI-SAM3DBody_utills",
         "ver": "0.2.1",
-        "Node name for S&R": "LoadSAM3DBodyModel"
+        "Node name for S&R": "LoadSAM3DBodyModel",
+        "cnr_id": "comfyui-sam3dbody_utills"
       },
       "widgets_values": [
         "Auto"
@@ -1032,6 +934,108 @@
       ],
       "color": "#432",
       "bgcolor": "#653"
+    },
+    {
+      "id": 673,
+      "type": "SAM3DBodyRenderFromJson",
+      "pos": [
+        1796.6607728366737,
+        105.5883119710878
+      ],
+      "size": [
+        414.5103515625,
+        1086
+      ],
+      "flags": {},
+      "order": 13,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "model",
+          "type": "SAM3D_MODEL",
+          "link": 1979
+        },
+        {
+          "name": "background_image",
+          "shape": 7,
+          "type": "IMAGE",
+          "link": 1980
+        },
+        {
+          "name": "pose_json",
+          "type": "STRING",
+          "widget": {
+            "name": "pose_json"
+          },
+          "link": 1981
+        }
+      ],
+      "outputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "links": [
+            1982,
+            1983,
+            1984
+          ]
+        },
+        {
+          "name": "settings_json",
+          "type": "STRING",
+          "links": null
+        }
+      ],
+      "properties": {
+        "aux_id": "tori29umai0123/ComfyUI-SAM3DBody_utills",
+        "ver": "b4e42d971cf9c0b2429b5d5ca166a2f1ad530552",
+        "Node name for S&R": "SAM3DBodyRenderFromJson"
+      },
+      "widgets_values": [
+        "{}",
+        "female",
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        -0.5,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0.9,
+        0.9,
+        1,
+        1,
+        0.03,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0.5,
+        0.3,
+        0.3,
+        0,
+        0.4,
+        0,
+        0.9,
+        0.5,
+        0.5,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
     }
   ],
   "links": [
@@ -1108,38 +1112,6 @@
       "IMAGE"
     ],
     [
-      1951,
-      655,
-      0,
-      660,
-      0,
-      "SAM3D_MODEL"
-    ],
-    [
-      1952,
-      653,
-      0,
-      660,
-      1,
-      "IMAGE"
-    ],
-    [
-      1953,
-      656,
-      0,
-      660,
-      2,
-      "STRING"
-    ],
-    [
-      1955,
-      660,
-      0,
-      662,
-      0,
-      "IMAGE"
-    ],
-    [
       1960,
       666,
       0,
@@ -1212,14 +1184,6 @@
       "LATENT"
     ],
     [
-      1969,
-      660,
-      0,
-      667,
-      2,
-      "IMAGE"
-    ],
-    [
       1970,
       54,
       0,
@@ -1236,8 +1200,48 @@
       "IMAGE"
     ],
     [
-      1972,
-      660,
+      1979,
+      655,
+      0,
+      673,
+      0,
+      "SAM3D_MODEL"
+    ],
+    [
+      1980,
+      653,
+      0,
+      673,
+      1,
+      "IMAGE"
+    ],
+    [
+      1981,
+      656,
+      0,
+      673,
+      2,
+      "STRING"
+    ],
+    [
+      1982,
+      673,
+      0,
+      662,
+      0,
+      "IMAGE"
+    ],
+    [
+      1983,
+      673,
+      0,
+      667,
+      2,
+      "IMAGE"
+    ],
+    [
+      1984,
+      673,
       0,
       668,
       0,
@@ -1248,10 +1252,10 @@
   "config": {},
   "extra": {
     "ds": {
-      "scale": 0.3797498335832589,
+      "scale": 0.3797498335832598,
       "offset": [
-        2607.80215468767,
-        1638.8252846365913
+        1719.2547045547853,
+        607.7155661396129
       ]
     },
     "workflowRendererVersion": "LG",

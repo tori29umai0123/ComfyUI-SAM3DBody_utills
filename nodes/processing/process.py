@@ -1,6 +1,7 @@
 import os
 import json
 import tempfile
+import math
 import torch
 import numpy as np
 import cv2
@@ -205,6 +206,146 @@ _FACE_BS_CACHE = {
     "joint_parents": None,           # np.int32 [J]  parent index per joint (-1 root)
     "joint_chain_cats": None,        # np.int8 [J]  0=none, 1=torso, 2=neck, 3=arm, 4=leg
 }
+
+
+_POSE_ADJUST_DEFAULT = 0.0
+_LEAN_CHAIN_DEFAULT = (
+    (35,  math.radians(14.0)),
+    (36,  math.radians(14.0)),
+    (37,  math.radians(14.0)),
+    (110, math.radians(2.0)),
+    (113, math.radians(2.0)),
+)
+
+
+def _subtree_indices(parents: np.ndarray, root: int) -> list[int]:
+    """Return root + all descendants in the parents-encoded tree."""
+    num_joints = int(parents.shape[0])
+    children: dict[int, list[int]] = {}
+    for j in range(num_joints):
+        p = int(parents[j])
+        if p >= 0:
+            children.setdefault(p, []).append(j)
+    out: list[int] = []
+    stack = [root]
+    while stack:
+        node = stack.pop()
+        out.append(node)
+        stack.extend(children.get(node, ()))
+    return out
+
+
+def _rotx_x_axis(theta: float) -> np.ndarray:
+    c, s = math.cos(theta), math.sin(theta)
+    return np.array(
+        [[1.0, 0.0, 0.0],
+         [0.0,   c,  -s],
+         [0.0,   s,   c]],
+        dtype=np.float32,
+    )
+
+
+def apply_pose_lean_correction_mesh(
+    vertices: np.ndarray,
+    joint_coords_posed: np.ndarray,
+    strength: float,
+    *,
+    chain: tuple[tuple[int, float], ...] | None = None,
+) -> np.ndarray:
+    """Rotate the posed mesh backward along the spine->neck chain."""
+    if strength is None:
+        return vertices
+    try:
+        s = float(strength)
+    except (TypeError, ValueError):
+        return vertices
+    if not math.isfinite(s) or s <= 1e-6:
+        return vertices
+
+    lbs_weights = _FACE_BS_CACHE.get("lbs_weights")
+    parents = _FACE_BS_CACHE.get("joint_parents")
+    if lbs_weights is None or parents is None or joint_coords_posed is None:
+        return vertices
+
+    w_sum = lbs_weights.sum(axis=1, keepdims=True).astype(np.float32)
+    w_sum_safe = np.where(w_sum > 1e-6, w_sum, 1.0)
+    w_norm = (lbs_weights / w_sum_safe).astype(np.float32)
+
+    verts = vertices.astype(np.float32, copy=True)
+    coords = joint_coords_posed.astype(np.float32, copy=True)
+    active_chain = chain if chain is not None else _LEAN_CHAIN_DEFAULT
+
+    for joint_id, base_angle in active_chain:
+        if joint_id >= int(parents.shape[0]):
+            continue
+        theta = s * float(base_angle)
+        if abs(theta) < 1e-8:
+            continue
+        subtree = _subtree_indices(parents, joint_id)
+        if not subtree:
+            continue
+
+        pivot = coords[joint_id].copy()
+        sub_w = w_norm[:, subtree].sum(axis=1).astype(np.float32)
+        eff = (-theta) * sub_w
+        c = np.cos(eff)
+        sn = np.sin(eff)
+        dy = verts[:, 1] - pivot[1]
+        dz = verts[:, 2] - pivot[2]
+        verts[:, 1] = pivot[1] + dy * c - dz * sn
+        verts[:, 2] = pivot[2] + dy * sn + dz * c
+
+        full_c = math.cos(-theta)
+        full_s = math.sin(-theta)
+        for k in subtree:
+            ky = coords[k, 1] - pivot[1]
+            kz = coords[k, 2] - pivot[2]
+            coords[k, 1] = pivot[1] + ky * full_c - kz * full_s
+            coords[k, 2] = pivot[2] + ky * full_s + kz * full_c
+
+    return verts.astype(vertices.dtype)
+
+
+def apply_pose_lean_correction_rig(
+    posed_joint_rots: np.ndarray,
+    posed_joint_coords: np.ndarray,
+    parents: np.ndarray,
+    strength: float,
+    *,
+    chain: tuple[tuple[int, float], ...] | None = None,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Rig-space lean correction for BVH/FBX export."""
+    rots = posed_joint_rots.astype(np.float32, copy=True)
+    coords = posed_joint_coords.astype(np.float32, copy=True)
+    if strength is None:
+        return rots, coords
+    try:
+        s = float(strength)
+    except (TypeError, ValueError):
+        return rots, coords
+    if not math.isfinite(s) or s <= 1e-6 or parents is None:
+        return rots, coords
+
+    active_chain = chain if chain is not None else _LEAN_CHAIN_DEFAULT
+    num_joints = int(parents.shape[0])
+    for joint_id, base_angle in active_chain:
+        if joint_id >= num_joints:
+            continue
+        theta = s * float(base_angle)
+        if abs(theta) < 1e-8:
+            continue
+        subtree = _subtree_indices(parents, joint_id)
+        if not subtree:
+            continue
+
+        pivot = coords[joint_id].copy()
+        corr = _rotx_x_axis(-theta)
+        for k in subtree:
+            off = coords[k] - pivot
+            coords[k] = pivot + corr @ off
+            rots[k] = corr @ rots[k]
+
+    return rots, coords
 
 
 def _build_lbs_weights(mhr_head, num_verts: int, num_joints: int) -> np.ndarray:
@@ -1174,6 +1315,7 @@ class SAM3DBodyRenderFromJson:
             "camera_pitch_deg": ("FLOAT", {"default": 0.0, "min": -89.0,  "max": 89.0,  "step": 1.0}),
             "width":        ("INT",   {"default": 0,   "min": 0,    "max": 8192}),
             "height":       ("INT",   {"default": 0,   "min": 0,    "max": 8192}),
+            "pose_adjust":  ("FLOAT", {"default": 0.0, "min": 0.0,  "max": 1.0, "step": 0.01}),
             # Body (MHR 45-dim PCA, first 9 axes)
             "body_fat":              ("FLOAT", _body("fat")),
             "body_muscle":           ("FLOAT", _body("muscle")),
@@ -1209,7 +1351,7 @@ class SAM3DBodyRenderFromJson:
     def render(self, model, pose_json, preset="none",
                      offset_x=0.0, offset_y=0.0, scale_offset=1.0,
                      camera_yaw_deg=0.0, camera_pitch_deg=0.0,
-                     width=1024, height=1024,
+                     width=1024, height=1024, pose_adjust=0.0,
                      body_fat=0.0, body_muscle=0.0, body_fat_muscle=0.0,
                      body_limb_girth=0.0, body_limb_muscle=0.0, body_limb_fat=0.0,
                      body_chest_shoulder=0.0, body_waist_hip=0.0,
@@ -1258,6 +1400,10 @@ class SAM3DBodyRenderFromJson:
             },
             "blendshapes": {k: float(v) for k, v in sorted(blendshape_sliders.items())},
         }
+        try:
+            lean_strength = float(pose_adjust)
+        except (TypeError, ValueError):
+            lean_strength = _POSE_ADJUST_DEFAULT
 
         try:
             payload = json.loads(pose_json) if pose_json else {}
@@ -1414,6 +1560,25 @@ class SAM3DBodyRenderFromJson:
                 joint_rots_posed=rots_np,
             )
 
+        corrected_pose_json = {}
+        if coords_np is not None and lean_strength > 1e-6:
+            vertices = apply_pose_lean_correction_mesh(
+                vertices,
+                coords_np,
+                lean_strength,
+            )
+            if rots_np is not None:
+                corrected_rots, corrected_coords = apply_pose_lean_correction_rig(
+                    rots_np,
+                    coords_np,
+                    _FACE_BS_CACHE.get("joint_parents"),
+                    lean_strength,
+                )
+                corrected_pose_json = {
+                    "posed_joint_rots": corrected_rots.tolist(),
+                    "posed_joint_coords": corrected_coords.tolist(),
+                }
+
         if background_image is not None:
             bg_bgr = comfy_image_to_numpy(background_image)
             render_h, render_w = bg_bgr.shape[:2]
@@ -1566,7 +1731,13 @@ class SAM3DBodyRenderFromJson:
         # would clobber the previous character's saved values.
         if active_preset != "reset":
             _save_autosave(settings)
-        return (numpy_to_comfy_image(rendered_bgr), json.dumps(settings, ensure_ascii=False, indent=2))
+        settings_json_payload = dict(settings)
+        if corrected_pose_json:
+            settings_json_payload["corrected_pose_json"] = corrected_pose_json
+        return (
+            numpy_to_comfy_image(rendered_bgr),
+            json.dumps(settings_json_payload, ensure_ascii=False, indent=2),
+        )
 
 
 # Register nodes
