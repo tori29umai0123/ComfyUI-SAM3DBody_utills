@@ -43,6 +43,13 @@ except ImportError:
     print("ERROR: this script must run under Blender")
     sys.exit(1)
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from humanoid_convert import (  # noqa: E402
+    apply_humanoid_conversion,
+    build_humanoid_to_dense,
+    reorient_bones_along_chain,
+)
+
 
 # Axis swap: MHR native (X right, Y up, Z forward) -> Blender internal
 # (X right, Y back, Z up). Identical to build_rigged_fbx.py.
@@ -116,18 +123,35 @@ def main():
             children_by_parent.setdefault(p, []).append(j)
 
     DEFAULT_LENGTH = 0.05
+    # Bones are oriented along the anatomical parent→self→child axis; see
+    # the long comment in build_rigged_fbx.py for why the MHR rest rotation
+    # is no longer planted onto edit_bone.matrix.
     for j in range(num_joints):
         bone = arm_obj.data.edit_bones.new(names[j])
+        bone.head = rest_coords[j]
+        bone.tail = rest_coords[j] + Vector((0.0, 0.0, DEFAULT_LENGTH))
+
+    for j in range(num_joints):
+        bone = arm_obj.data.edit_bones[names[j]]
+        head = Vector(rest_coords[j])
         kids = children_by_parent.get(j, [])
+        tail = None
         if kids:
             child_k = _pick_chain_child(j, parents[j], kids, rest_coords)
-            dist = (rest_coords[child_k] - rest_coords[j]).length
-            bone.length = max(dist, 1e-3)
-        else:
-            bone.length = DEFAULT_LENGTH
-        M = rest_rots[j].to_4x4()
-        M.translation = rest_coords[j]
-        bone.matrix = M
+            diff = Vector(rest_coords[child_k]) - head
+            if diff.length > 1e-4:
+                tail = Vector(rest_coords[child_k])
+        if tail is None:
+            p = parents[j]
+            direction = None
+            if p >= 0:
+                pdiff = head - Vector(rest_coords[p])
+                if pdiff.length > 1e-4:
+                    direction = pdiff.normalized()
+            if direction is None:
+                direction = Vector((0.0, 0.0, 1.0))
+            tail = head + direction * DEFAULT_LENGTH
+        bone.tail = tail
 
     for j in range(num_joints):
         p = parents[j]
@@ -173,6 +197,23 @@ def main():
     mod.object = arm_obj
     mod.use_vertex_groups = True
 
+    # ----- Humanoid bone-layout conversion -----
+    # Collapse the raw MHR rig into the humanoid layout BEFORE pose
+    # keyframing. Twist helpers and intermediate inserts get their LBS
+    # weights absorbed into the neighbouring surviving bone, so the mesh
+    # stays attached to sensible anatomy on every frame.
+    rename_map = apply_humanoid_conversion(arm_obj, mesh_obj)
+    humanoid_to_dense = build_humanoid_to_dense(rename_map, names)
+
+    # Re-point each bone's tail at its real chain child (twist helpers are
+    # gone). See build_rigged_fbx.py for the reasoning.
+    reorient_bones_along_chain(arm_obj)
+
+    # Snapshot each bone's rest matrix (armature space) in Object mode
+    # before we enter Pose mode. These are the anatomical rest frames
+    # produced by head/tail placement and drive the pose-delta formula.
+    bone_rest_M3 = {b.name: b.matrix_local.to_3x3() for b in arm_obj.data.bones}
+
     # ----- Per-frame pose keyframes -----
     frames_posed_rots = data["frames_posed_joint_rots"]
     num_frames = len(frames_posed_rots)
@@ -183,14 +224,16 @@ def main():
         len(frames_root_trans) == num_frames
         and any(any(abs(c) > 1e-8 for c in t) for t in frames_root_trans)
     )
-    # Identify the (single) root joint so we can write location
-    # keyframes on it. Any joint whose parent is -1 counts; in practice
-    # there is exactly one.
-    root_idx = next((j for j, p in enumerate(parents) if p < 0), None)
+    # Root after conversion is whichever pose bone has no parent (= Hips).
+    root_bone = next(
+        (pb for pb in arm_obj.pose.bones if pb.parent is None),
+        None,
+    )
+    root_j = humanoid_to_dense.get(root_bone.name) if root_bone else None
     print(
         f"[build_animated_fbx] Baking {num_frames} frames @ {fps} fps "
         f"(root motion: {'yes' if has_root_motion else 'no'}, "
-        f"root bone: {names[root_idx] if root_idx is not None else '<none>'})"
+        f"root bone: {root_bone.name if root_bone else '<none>'})"
     )
 
     bpy.context.view_layer.objects.active = arm_obj
@@ -208,15 +251,36 @@ def main():
     scene.frame_end = max(num_frames, 1)
     scene.render.fps = int(round(fps))
 
-    rest_rots_T = [R.transposed() for R in rest_rots]
+    # Precompute per-bone constants for the hot loop.
+    #
+    # The LBS delta Blender applies to verts is `M_pose_j @ M_rest_j^-1`.
+    # Since M_rest_j (anatomical) != R_rest_j (MHR), matching MHR's world
+    # delta `R_pose_j @ R_rest_j^-1` requires conjugating the classic MHR
+    # local delta by C = R_rest_j^T @ M_rest_j:
+    #   Q_j   = M_rj^T @ R_rp @ R_pp^T @ R_pj @ R_rj^T @ M_rj   (non-root)
+    #   Q_root = M_rj^T @ R_pj @ R_rj^T @ M_rj
+    # The parts that don't depend on the per-frame pose (M_rj^T, R_rj^T @
+    # M_rj, and M_rj^T @ R_rp for non-root) are cached per bone here.
+    pose_bone_infos: list[tuple] = []
+    for pbone in arm_obj.pose.bones:
+        j = humanoid_to_dense.get(pbone.name)
+        if j is None:
+            continue
+        M_rj = bone_rest_M3[pbone.name]
+        M_rj_T = M_rj.transposed()
+        R_rj_T = rest_rots[j].transposed()
+        post_j = R_rj_T @ M_rj           # right-side basis change
+        parent_pb = pbone.parent
+        p = humanoid_to_dense.get(parent_pb.name, -1) if parent_pb else -1
+        if p < 0 or parent_pb is None:
+            pre_j = M_rj_T              # root has no parent factor
+        else:
+            pre_j = M_rj_T @ rest_rots[p]  # M_rj^T @ R_rp
+        pose_bone_infos.append((pbone, j, p, pre_j, post_j))
 
-    # Precompute bone-local conversion for the root: world delta -> local
-    # location is `R_rest_root.T @ delta_world`. Cache the transpose so
-    # the per-frame inner loop stays cheap.
-    root_rest_rot_T = rest_rots_T[root_idx] if root_idx is not None else None
-    root_bone = (
-        arm_obj.pose.bones.get(names[root_idx])
-        if root_idx is not None else None
+    # Root translation conversion uses the Hips bone's rest rotation.
+    root_rest_rot_T = (
+        bone_rest_M3[root_bone.name].transposed() if root_bone is not None else None
     )
 
     for f_i, posed_rots_raw in enumerate(frames_posed_rots):
@@ -225,24 +289,12 @@ def main():
         posed_rots_bl = [mhr_to_blender_rot(r) for r in posed_rots_raw]
         posed_rots_bl_T = [R.transposed() for R in posed_rots_bl]
 
-        for j in range(num_joints):
-            pbone = arm_obj.pose.bones.get(names[j])
-            if pbone is None:
-                continue
-            R_rest_j = rest_rots[j]
-            R_posed_j = posed_rots_bl[j]
-            p = parents[j]
+        for pbone, j, p, pre_j, post_j in pose_bone_infos:
+            R_pj = posed_rots_bl[j]
             if p < 0:
-                # Root: local delta = R_rest_j^T @ R_posed_j
-                delta = rest_rots_T[j] @ R_posed_j
+                delta = pre_j @ R_pj @ post_j
             else:
-                R_rest_p = rest_rots[p]
-                # pose_delta = (R_rest_j^T @ R_rest_p)
-                #              @ (R_posed_p^T @ R_posed_j)
-                delta = (
-                    rest_rots_T[j] @ R_rest_p
-                    @ posed_rots_bl_T[p] @ R_posed_j
-                )
+                delta = pre_j @ posed_rots_bl_T[p] @ R_pj @ post_j
             pbone.rotation_quaternion = delta.to_quaternion()
             pbone.keyframe_insert(data_path="rotation_quaternion", frame=frame)
 
@@ -252,7 +304,7 @@ def main():
         # just when `has_root_motion` is True) once the feature is
         # active, to keep the F-Curve dense enough for Unity's clip
         # importer — otherwise a single initial key would hold.
-        if has_root_motion and root_bone is not None:
+        if has_root_motion and root_bone is not None and root_rest_rot_T is not None:
             world_delta = mhr_to_blender_vec(frames_root_trans[f_i])
             local_delta = root_rest_rot_T @ world_delta
             root_bone.location = local_delta

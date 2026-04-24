@@ -33,6 +33,13 @@ except ImportError:
     print("ERROR: this script must run under Blender")
     sys.exit(1)
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from humanoid_convert import (  # noqa: E402
+    apply_humanoid_conversion,
+    build_humanoid_to_dense,
+    reorient_bones_along_chain,
+)
+
 
 # Axis swap: MHR native (X right, Y up, Z forward) -> Blender internal
 # (X right, Y back, Z up). Verified against existing extract / build
@@ -115,33 +122,46 @@ def main():
             children_by_parent.setdefault(p, []).append(j)
 
     DEFAULT_LENGTH = 0.05
-    # Set each bone's full rest transform via `edit_bone.matrix` rather
-    # than head/tail/roll. This plants the bone's rest orientation at
-    # the MHR rest rotation, which is ESSENTIAL for pose_bone.matrix in
-    # pose mode to compute the right local delta — otherwise Blender
-    # derives a default orientation from head/tail and every posed bone
-    # ends up tilted by the mismatch.
+    # Orient each bone along its ANATOMICAL axis (parent→self→child chain)
+    # instead of planting the MHR joint's rest rotation onto the bone. Using
+    # R_rest as the bone's orientation made the rig pose-correct but left
+    # spines, arms, etc. lying sideways in the viewport — DCCs and Unity
+    # Humanoid auto-mapping rely on the head→tail direction, not on joint
+    # local frames. The pose-delta formula is rewritten below to read each
+    # bone's actual rest matrix (derived from head/tail) so correctness is
+    # preserved while the rig stays readable.
     for j in range(num_joints):
         bone = arm_obj.data.edit_bones.new(names[j])
-        # Choose a sensible length from child distance (so the bone
-        # visualization isn't a 1m stick). Must be > 0 BEFORE setting
-        # .matrix because `matrix` preserves current length while
-        # planting head/tail on the new orientation.
+        bone.head = rest_coords[j]
+        # Placeholder tail; rewritten in the next pass once all heads exist.
+        bone.tail = rest_coords[j] + Vector((0.0, 0.0, DEFAULT_LENGTH))
+
+    for j in range(num_joints):
+        bone = arm_obj.data.edit_bones[names[j]]
+        head = Vector(rest_coords[j])
         kids = children_by_parent.get(j, [])
+        tail = None
         if kids:
             child_k = _pick_chain_child(j, parents[j], kids, rest_coords)
-            dist = (rest_coords[child_k] - rest_coords[j]).length
-            bone.length = max(dist, 1e-3)
-        else:
-            bone.length = DEFAULT_LENGTH
-        # Now write the full rest world transform (armature local space,
-        # but armature.matrix_world = identity so that equals world).
-        M = rest_rots[j].to_4x4()
-        M.translation = rest_coords[j]
-        bone.matrix = M
+            diff = Vector(rest_coords[child_k]) - head
+            if diff.length > 1e-4:
+                tail = Vector(rest_coords[child_k])
+        if tail is None:
+            # Leaf (or coincident child): extend in the parent→self
+            # direction so finger tips / toe ends / head-top dangle in a
+            # sensible orientation instead of flipping to a default axis.
+            p = parents[j]
+            direction = None
+            if p >= 0:
+                pdiff = head - Vector(rest_coords[p])
+                if pdiff.length > 1e-4:
+                    direction = pdiff.normalized()
+            if direction is None:
+                direction = Vector((0.0, 0.0, 1.0))
+            tail = head + direction * DEFAULT_LENGTH
+        bone.tail = tail
 
-    # Second pass: set parents once all bones exist, since edit_bones.new
-    # doesn't take a parent.
+    # Third pass: parent wiring (edit_bones.new doesn't accept a parent).
     for j in range(num_joints):
         p = parents[j]
         if p < 0:
@@ -189,48 +209,63 @@ def main():
     mod.object = arm_obj
     mod.use_vertex_groups = True
 
-    # ----- Pose: compute LOCAL delta rotation per bone, set it on
-    # pose_bone.rotation_quaternion. pose_bone.location stays at 0 so
-    # the bone chain's world positions come from forward kinematics
-    # (rest link offsets + cumulative local rotations). Using
-    # pose_bone.matrix = world_matrix instead produced huge
-    # pose_bone.location values in our output — the Blender exporter
-    # would bake those offsets into the animation, destroying the rig.
+    # ----- Humanoid bone-layout conversion -----
+    # Before computing pose keyframes we collapse the raw MHR rig (twist
+    # helpers, inserted joints, 5-node finger chains, multi-toe stubs, ...)
+    # into the ~65-bone humanoid layout. LBS weights of removed bones are
+    # transferred into their surviving "absorber" bone, so the skin keeps
+    # following sensible anatomy after the merge.
+    rename_map = apply_humanoid_conversion(arm_obj, mesh_obj)
+    humanoid_to_dense = build_humanoid_to_dense(rename_map, names)
+
+    # After the twist / intermediate bones are gone, re-point each surviving
+    # bone's tail at its remaining chain child so e.g. LeftArm reaches all
+    # the way to LeftForeArm instead of stopping at an absorbed twist helper.
+    reorient_bones_along_chain(arm_obj)
+
+    # Snapshot each surviving bone's REST matrix in armature space. These
+    # are the orientations Blender derived from our head/tail placement
+    # (anatomical axes), and they drive the pose-delta formula below. We
+    # read them here (Object mode) before entering Pose mode so the data
+    # bones still expose ``matrix_local``.
+    bone_rest_M3 = {b.name: b.matrix_local.to_3x3() for b in arm_obj.data.bones}
+
+    # ----- Pose: compute LOCAL delta rotation per bone on the NEW rig.
+    # The bones were re-oriented anatomically (M_rest ≠ MHR R_rest), so the
+    # Blender LBS delta `M_pose @ M_rest^-1` only matches MHR's world delta
+    # `R_pose_j @ R_rest_j^-1` if we conjugate the MHR local delta by the
+    # basis change C = R_rest_j^T @ M_rest_j:
+    #   Q_j  =  M_rest_j^T @ R_rest_p @ R_pose_p^T @ R_pose_j @ R_rest_j^T @ M_rest_j      (non-root)
+    #   Q_root = M_rest_root^T @ R_pose_root @ R_rest_root^T @ M_rest_root
+    # When M_rest_j == R_rest_j (the old code path) this collapses back to
+    # the classic `R_rest_j^T @ R_rest_p @ R_pose_p^T @ R_pose_j`.
     bpy.context.view_layer.objects.active = arm_obj
     bpy.ops.object.mode_set(mode='POSE')
 
     posed_rots_bl = [mhr_to_blender_rot(r) for r in data["posed_joint_rots"]]
-    # rest_rots already computed above; reuse.
 
-    from mathutils import Quaternion
-    identity_rot = Matrix.Identity(3)
-    for j in range(num_joints):
-        pbone = arm_obj.pose.bones.get(names[j])
-        if pbone is None:
-            continue
-        R_rest_j = rest_rots[j]
-        R_posed_j = posed_rots_bl[j]
-        p = parents[j]
-        if p < 0:
-            # Root: local delta = R_rest_j^T @ R_posed_j
-            delta = R_rest_j.transposed() @ R_posed_j
-        else:
-            R_rest_p = rest_rots[p]
-            R_posed_p = posed_rots_bl[p]
-            # Derivation:
-            #   bone_world_posed = parent_world_posed
-            #                       @ (R_rest_p^-1 @ R_rest_j)   ← rest link
-            #                       @ pose_delta
-            #   => pose_delta = (R_rest_j^-1 @ R_rest_p)
-            #                   @ (R_posed_p^-1 @ R_posed_j)
-            delta = (
-                R_rest_j.transposed() @ R_rest_p
-                @ R_posed_p.transposed() @ R_posed_j
-            )
-        pbone.rotation_quaternion = delta.to_quaternion()
+    for pbone in arm_obj.pose.bones:
+        j = humanoid_to_dense.get(pbone.name)
         pbone.rotation_mode = 'QUATERNION'
         pbone.location = (0.0, 0.0, 0.0)
         pbone.scale = (1.0, 1.0, 1.0)
+        if j is None:
+            pbone.rotation_quaternion = (1.0, 0.0, 0.0, 0.0)
+            continue
+        M_rj = bone_rest_M3[pbone.name]
+        M_rj_T = M_rj.transposed()
+        R_rj = rest_rots[j]
+        R_rj_T = R_rj.transposed()
+        R_pj = posed_rots_bl[j]
+        parent_pb = pbone.parent
+        p = humanoid_to_dense.get(parent_pb.name, -1) if parent_pb else -1
+        if parent_pb is None or p < 0:
+            delta = M_rj_T @ R_pj @ R_rj_T @ M_rj
+        else:
+            R_rp = rest_rots[p]
+            R_pp_T = posed_rots_bl[p].transposed()
+            delta = M_rj_T @ R_rp @ R_pp_T @ R_pj @ R_rj_T @ M_rj
+        pbone.rotation_quaternion = delta.to_quaternion()
 
     # Keyframe the posed state at BOTH frame 1 and frame _ANIM_LAST so
     # the exported clip has a non-zero duration — Unity (and other DCCs)
