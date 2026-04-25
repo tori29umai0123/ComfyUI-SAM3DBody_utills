@@ -206,23 +206,21 @@ Likewise the **"Open Character Editor"** button drops you into a modal where the
 
 The intended use is treating this plugin's render as an **intermediate artifact fed into an image-editing model** (here Qwen-Image-Edit). It lets you merge two separate inputs — "pose from character A, body type from character B" — via a geometrically correct 3D body in the middle.
 
-## Render Human From Pose JSON — parameter reference
+## SAM 3D Body: Render Human From Pose And Chara JSON node
 
-Takes the pose estimated from an input image (`pose_json`) and renders it onto the **MHR neutral body**.
+Takes `pose_json` + `chara_json` as inputs and renders the 3D body. Character authoring (PCA shape / bone length / blend shapes) is delegated to `chara_json`, so the only widgets left on this node are **camera controls + lean correction**.
 
-- Character shape (`shape_params` / `scale_params`) from pose_json is **ignored**.
+- Character shape (`shape_params` / `scale_params`) carried inside pose_json is **ignored**.
 - Only pose-ish fields (`global_rot` / `body_pose_params` / `hand_pose_params` / `expr_params`) are taken from pose_json.
-- Body shape is fully controlled by the UI sliders (`body_*` / `bone_*` / `bs_*`). All-zero sliders = perfectly neutral body.
-
-This way you can **load characters of different body types but get pose-consistent renders on a single uniform body**.
+- Body shape is fully driven by `chara_json` (from the Setting Chara JSON node or the Character Editor).
 
 ### Required inputs
 
 | Parameter | Default | Range | Notes |
 |---|---|---|---|
 | model | — | — | SAM 3D Body model (Load node output) |
-| pose_json | `"{}"` | — | Pose JSON (Process Image to Pose JSON node output) |
-| preset | `"none"` | — | Preset selector (currently identical for all values; preset feature is unimplemented) |
+| pose_json | `"{}"` | — | Pose JSON (Process Image to Pose JSON node or Pose Editor output) |
+| chara_json | `"{}"` | — | Character JSON (Setting Chara JSON node or Character Editor output) |
 | offset_x | 0.0 | −5.0 … 5.0 | Horizontal positional offset (added to `camera[0]` in meters). **Pans the subject left/right within the image** |
 | offset_y | 0.0 | −5.0 … 5.0 | Vertical positional offset (added to `camera[1]`). **Pans the subject up/down within the image** |
 | scale_offset | 1.0 | 0.1 … 5.0 | Camera distance **multiplier**. 1.0 = identity, 0.1 = extreme zoom in, 5.0 = zoom out |
@@ -230,12 +228,42 @@ This way you can **load characters of different body types but get pose-consiste
 | camera_pitch_deg | 0.0 | −89 … 89 | **Vertical orbit** around the subject centroid. `+` raises the camera (looking **down** at the subject), `−` looks **up**. The subject stays centered in the frame |
 | width | 0 | 0 … 8192 | Output width (0 = use pose_json's source image size) |
 | height | 0 | 0 … 8192 | Output height (0 = same) |
+| pose_adjust | 0.0 | 0.0 … 1.0 | **Lean-correction** strength. SAM 3D Body tends to estimate standing subjects as slightly forward-leaning; this slider tilts the spine→neck chain backwards to compensate. 1.0 = full correction; live action: 0.0, illustrated input: ~0.5 as a guideline |
 
 ### Optional inputs
 
 | Parameter | Notes |
 |---|---|
 | background_image | Background image. If left unconnected, the background is black |
+
+### Outputs
+
+| Output | Notes |
+|---|---|
+| image | The rendered RGB image |
+
+## SAM 3D Body: Setting Chara JSON node
+
+The **character-authoring half** split out from the legacy Render node. Drives preset selection + 9-axis PCA shape sliders + 4 bone-length sliders + face/body blendshape sliders, and emits `chara_json` (STRING). Plug it directly into the Render node's `chara_json` or any Export node's `character_json`.
+
+- Output JSON is schema-compatible with `chara_settings_presets/*.json`.
+- Picking a preset (autosave / female / male / chibi …) overwrites every slider.
+- **Autosave**: on every execute (when `preset` ≠ `reset`), the current values are written to `chara_settings_presets/autosave.json` and become the next session's slider defaults.
+
+### Inputs
+
+| Parameter | Default | Notes |
+|---|---|---|
+| preset | `autosave` | Preset selector. `autosave` is pinned to the top |
+| body_* | 0.0 | PCA 9-axis body shape sliders (see below) |
+| bone_* | 1.0 | Four bone-length scale sliders (see below) |
+| bs_* | 0.0 | 20 blend-shape sliders (see below) |
+
+### Outputs
+
+| Output | Notes |
+|---|---|
+| chara_json | Character settings JSON string. Three blocks: `body_params` / `bone_lengths` / `blendshapes`. Schema-compatible with `chara_settings_presets/*.json` |
 
 ### Body Params (PCA body shape) — `body_*`
 
@@ -266,7 +294,6 @@ Four sliders that rescale link lengths along specific MHR bone chains. Implement
 
 - Scale 1.0 = unchanged. 0.5 = half, 2.0 = double
 - Branch joints (`clavicle_l/r`, `thigh_l/r`) stay at 1.0 so shoulder / hip width are preserved
-- Formula: `new_posed_vert = Σ_j w_j [ s_j · R_rel[j] · (rest_V - rest_joint[j]) + new_posed_joint[j] ]`
 
 | Parameter | Default | Range | Affected MHR joints |
 |---|---|---|---|
@@ -281,7 +308,7 @@ Implemented in `_apply_bone_length_scales` (`nodes/processing/process.py`). We s
 
 20 sliders blending FBX-derived morph targets from `tools/bone_backup/all_parts_bs.fbx` into the posed mesh. Each slider defaults to **0.0**, range **0.0…1.0**, fully active at 1.0. Combining sliders is additive.
 
-The shape list is auto-discovered from `presets/face_blendshapes.npz` — add a new shape key in Blender, regenerate the npz, and the slider appears in the UI on next reload (no code changes). The `bs_` prefix is a UI-only label; FBX shape-key names and `settings_json` keys use the bare name.
+The shape list is auto-discovered from `presets/face_blendshapes.npz` — add a new shape key in Blender, regenerate the npz, and the slider appears in the UI on next reload (no code changes). The `bs_` prefix is a UI-only label; FBX shape-key names and `chara_json` keys use the bare name.
 
 #### Face
 
@@ -336,7 +363,6 @@ The shape list is auto-discovered from `presets/face_blendshapes.npz` — add a 
 | Parameter | Effect |
 |---|---|
 | bs_MuscleScale | Bulk up full-body muscle (macho) |
-
 
 ### Preset system
 
