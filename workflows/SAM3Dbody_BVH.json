@@ -136,7 +136,7 @@
         {
           "name": "MASK",
           "type": "MASK",
-          "links": []
+          "links": null
         }
       ],
       "properties": {
@@ -279,9 +279,7 @@
         {
           "name": "MASK",
           "type": "MASK",
-          "links": [
-            438
-          ]
+          "links": null
         }
       ],
       "properties": {
@@ -291,45 +289,6 @@
       },
       "widgets_values": [
         0
-      ]
-    },
-    {
-      "id": 132,
-      "type": "LoadImage",
-      "pos": [
-        -269.9426958271382,
-        -632.162692843569
-      ],
-      "size": [
-        344,
-        314
-      ],
-      "flags": {},
-      "order": 1,
-      "mode": 0,
-      "inputs": [],
-      "outputs": [
-        {
-          "name": "IMAGE",
-          "type": "IMAGE",
-          "links": [
-            436
-          ]
-        },
-        {
-          "name": "MASK",
-          "type": "MASK",
-          "links": null
-        }
-      ],
-      "properties": {
-        "cnr_id": "comfy-core",
-        "ver": "0.18.1",
-        "Node name for S&R": "LoadImage"
-      },
-      "widgets_values": [
-        "input_mask.png",
-        "image"
       ]
     },
     {
@@ -397,7 +356,7 @@
           "name": "mask",
           "shape": 7,
           "type": "MASK",
-          "link": 438
+          "link": null
         }
       ],
       "outputs": [
@@ -684,22 +643,6 @@
       125,
       0,
       "IMAGE"
-    ],
-    [
-      436,
-      132,
-      0,
-      131,
-      0,
-      "IMAGE"
-    ],
-    [
-      438,
-      131,
-      0,
-      45,
-      2,
-      "MASK"
     ],
     [
       439,

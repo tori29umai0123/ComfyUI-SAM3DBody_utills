@@ -24,6 +24,7 @@ import time
 import numpy as np
 import torch
 
+from .birefnet_mask import auto_mask_bgr
 from .process import (
     _FACE_BS_CACHE,
     _apply_face_blendshapes,
@@ -594,6 +595,8 @@ class SAM3DBodyExportAnimatedBVH:
                 if masks_np is not None:
                     mask_np = masks_np[i]
                     bboxes = _mask_frame_bbox(mask_np)
+                else:
+                    mask_np, bboxes = auto_mask_bgr(img_bgr)
 
                 outputs = estimator.process_one_image(
                     img_bgr,

@@ -6,6 +6,8 @@ import torch
 import numpy as np
 import cv2
 
+from .birefnet_mask import auto_mask_bgr
+
 # =============================================================================
 # Helper functions (inlined to avoid relative import issues in worker)
 # =============================================================================
@@ -210,9 +212,7 @@ _FACE_BS_CACHE = {
 
 _POSE_ADJUST_DEFAULT = 0.0
 _LEAN_CHAIN_DEFAULT = (
-    (35,  math.radians(14.0)),
-    (36,  math.radians(14.0)),
-    (37,  math.radians(14.0)),
+    (35,  math.radians(20.0)),
     (110, math.radians(2.0)),
     (113, math.radians(2.0)),
 )
@@ -1236,6 +1236,8 @@ class SAM3DBodyProcessToJson:
             if mask_np.ndim == 3:
                 mask_np = mask_np[0]
             bboxes = self._bbox_from_mask(mask_np)
+        else:
+            mask_np, bboxes = auto_mask_bgr(img_bgr)
 
         with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as tmp:
             cv2.imwrite(tmp.name, img_bgr)
@@ -1246,7 +1248,7 @@ class SAM3DBodyProcessToJson:
                 bboxes=bboxes,
                 masks=mask_np,
                 bbox_thr=bbox_threshold,
-                use_mask=(mask is not None),
+                use_mask=(mask_np is not None),
                 inference_type=inference_type,
             )
         finally:

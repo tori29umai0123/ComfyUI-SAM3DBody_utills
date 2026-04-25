@@ -21,6 +21,7 @@ import cv2
 import numpy as np
 import torch
 
+from .birefnet_mask import auto_mask_bgr
 from .process import (
     _load_sam3d_model,
     _get_mhr_rest_verts,
@@ -536,6 +537,8 @@ class SAM3DBodyExportAnimatedFBX:
             if masks_np is not None:
                 mask_np = masks_np[f_i]
                 bboxes = _mask_frame_bbox(mask_np)
+            else:
+                mask_np, bboxes = auto_mask_bgr(img_bgr)
 
             with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as tmp:
                 cv2.imwrite(tmp.name, img_bgr)

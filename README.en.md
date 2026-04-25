@@ -469,6 +469,8 @@ Tweak the Render node until the preview looks right, pipe its `settings_json` in
 
 Writes a full **Unity / Unreal-ready animated FBX** straight from a video (IMAGE batch). Feed a sequence of frames via `ComfyUI-VideoHelperSuite`'s `VHS_LoadVideo` (or any other source that emits a batched IMAGE tensor), and the node runs SAM 3D Body on every frame, then bakes all of them as keyframes onto **a character rigged once at its rest pose (body_pose = 0)**. The resulting FBX plays directly in Blender, Unity Animator / Timeline, and Unreal.
 
+If `masks` is left unconnected, the node now falls back to internal BiRefNet Lite masking for each frame. This is convenient, but if the segmentation is noisy or misses the subject, you should still connect an explicit `MASK` node for better tracking stability.
+
 See the [demo video](#3-export-motion-captured-fbx-from-a-video) (`docs/sample1.mp4`) near the top of this README for an example of the exported animation.
 
 > **Blender 4.1+ required.** The node spawns `blender.exe --background --python tools/build_animated_fbx.py` as a subprocess to build the armature, bind the LBS weights, write per-frame keyframes, and export the FBX.
@@ -517,6 +519,8 @@ Writes a single-pose **BVH** to `<ComfyUI>/output/`. Use the same `settings_json
 ## ⚠ Export Animated BVH node (video motion capture, Blender required)
 
 Writes an animated **BVH** from a video (IMAGE batch). The basic flow matches `Export Animated FBX`: estimate a pose on every frame, then bake the whole sequence into one BVH. The output contains skeleton + motion only, with no mesh.
+
+If `masks` is not connected, the node also falls back to internal BiRefNet Lite masking. That fallback is useful for quick setup, but for difficult footage you should provide an explicit mask input for higher accuracy.
 
 You can also optionally pass `pose_json` as `{"frames": [pose, ...], "fps": 30}` (or a plain list of poses) for manual pose-sequence export.
 

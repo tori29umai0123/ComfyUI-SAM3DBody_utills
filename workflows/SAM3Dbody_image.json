@@ -18,7 +18,7 @@
       "flags": {
         "collapsed": false
       },
-      "order": 3,
+      "order": 2,
       "mode": 0,
       "inputs": [
         {
@@ -67,7 +67,7 @@
         130
       ],
       "flags": {},
-      "order": 5,
+      "order": 4,
       "mode": 0,
       "inputs": [
         {
@@ -136,7 +136,7 @@
         {
           "name": "MASK",
           "type": "MASK",
-          "links": []
+          "links": null
         }
       ],
       "properties": {
@@ -161,7 +161,7 @@
         102
       ],
       "flags": {},
-      "order": 9,
+      "order": 6,
       "mode": 0,
       "inputs": [
         {
@@ -206,7 +206,7 @@
         246
       ],
       "flags": {},
-      "order": 12,
+      "order": 9,
       "mode": 0,
       "inputs": [
         {
@@ -270,7 +270,7 @@
         122
       ],
       "flags": {},
-      "order": 7,
+      "order": 3,
       "mode": 0,
       "inputs": [
         {
@@ -287,7 +287,7 @@
           "name": "mask",
           "shape": 7,
           "type": "MASK",
-          "link": 438
+          "link": null
         }
       ],
       "outputs": [
@@ -327,7 +327,7 @@
         270
       ],
       "flags": {},
-      "order": 10,
+      "order": 7,
       "mode": 0,
       "inputs": [
         {
@@ -358,7 +358,7 @@
         241.04820297373203
       ],
       "flags": {},
-      "order": 11,
+      "order": 8,
       "mode": 0,
       "inputs": [
         {
@@ -388,114 +388,6 @@
       ]
     },
     {
-      "id": 129,
-      "type": "MaskPreview+",
-      "pos": [
-        462.6169679746702,
-        -715.007809406517
-      ],
-      "size": [
-        155.071875,
-        246
-      ],
-      "flags": {},
-      "order": 6,
-      "mode": 0,
-      "inputs": [
-        {
-          "name": "mask",
-          "type": "MASK",
-          "link": 437
-        }
-      ],
-      "outputs": [],
-      "properties": {
-        "cnr_id": "comfyui_essentials",
-        "ver": "9d9f4bedfc9f0321c19faf71855e228c93bd0dc9",
-        "Node name for S&R": "MaskPreview+"
-      },
-      "widgets_values": []
-    },
-    {
-      "id": 131,
-      "type": "ImageColorToMask",
-      "pos": [
-        126.79675137986652,
-        -632.9109031619548
-      ],
-      "size": [
-        270,
-        58
-      ],
-      "flags": {},
-      "order": 4,
-      "mode": 0,
-      "inputs": [
-        {
-          "name": "image",
-          "type": "IMAGE",
-          "link": 436
-        }
-      ],
-      "outputs": [
-        {
-          "name": "MASK",
-          "type": "MASK",
-          "links": [
-            437,
-            438
-          ]
-        }
-      ],
-      "properties": {
-        "cnr_id": "comfy-core",
-        "ver": "0.18.1",
-        "Node name for S&R": "ImageColorToMask"
-      },
-      "widgets_values": [
-        0
-      ]
-    },
-    {
-      "id": 132,
-      "type": "LoadImage",
-      "pos": [
-        -269.9426958271382,
-        -632.162692843569
-      ],
-      "size": [
-        344,
-        314
-      ],
-      "flags": {},
-      "order": 2,
-      "mode": 0,
-      "inputs": [],
-      "outputs": [
-        {
-          "name": "IMAGE",
-          "type": "IMAGE",
-          "links": [
-            436
-          ]
-        },
-        {
-          "name": "MASK",
-          "type": "MASK",
-          "links": null
-        }
-      ],
-      "properties": {
-        "cnr_id": "comfy-core",
-        "ver": "0.18.1",
-        "Node name for S&R": "LoadImage"
-      },
-      "widgets_values": [
-        "input_mask.png",
-        "image"
-      ]
-    },
-    {
       "id": 124,
       "type": "SAM3DBodyRenderFromJson",
       "pos": [
@@ -507,7 +399,7 @@
         1086
       ],
       "flags": {},
-      "order": 8,
+      "order": 5,
       "mode": 0,
       "inputs": [
         {
@@ -704,40 +596,16 @@
       125,
       0,
       "IMAGE"
-    ],
-    [
-      436,
-      132,
-      0,
-      131,
-      0,
-      "IMAGE"
-    ],
-    [
-      437,
-      131,
-      0,
-      129,
-      0,
-      "MASK"
-    ],
-    [
-      438,
-      131,
-      0,
-      45,
-      2,
-      "MASK"
     ]
   ],
   "groups": [],
   "config": {},
   "extra": {
     "ds": {
-      "scale": 0.6934334949441482,
+      "scale": 0.8390545288824205,
       "offset": [
-        848.9750357803925,
-        1372.9427812170754
+        646.5475410463607,
+        1628.5035306932555
       ]
     },
     "frontendVersion": "1.42.8",

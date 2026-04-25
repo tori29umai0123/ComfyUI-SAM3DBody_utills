@@ -114,66 +114,6 @@
       ]
     },
     {
-      "id": 2,
-      "type": "SAM3Segmentation",
-      "pos": [
-        -986.8999153103088,
-        -3614.3636882292617
-      ],
-      "size": [
-        270,
-        262
-      ],
-      "flags": {},
-      "order": 2,
-      "mode": 0,
-      "inputs": [
-        {
-          "name": "image",
-          "type": "IMAGE",
-          "link": 1
-        }
-      ],
-      "outputs": [
-        {
-          "name": "segmented_image",
-          "type": "IMAGE",
-          "links": null
-        },
-        {
-          "name": "masks",
-          "type": "MASK",
-          "links": [
-            21
-          ]
-        },
-        {
-          "name": "mask_combined",
-          "type": "MASK",
-          "links": null
-        },
-        {
-          "name": "segs",
-          "type": "SEGS",
-          "links": null
-        }
-      ],
-      "properties": {
-        "cnr_id": "comfyui_sam3",
-        "ver": "0.2.1",
-        "Node name for S&R": "SAM3Segmentation"
-      },
-      "widgets_values": [
-        "person",
-        0.5,
-        0,
-        0,
-        false,
-        false,
-        ""
-      ]
-    },
-    {
       "id": 7,
       "type": "VHS_VideoInfo",
       "pos": [
@@ -284,7 +224,7 @@
           "name": "masks",
           "shape": 7,
           "type": "MASK",
-          "link": 21
+          "link": null
         },
         {
           "name": "fps",
@@ -353,7 +293,6 @@
           "name": "IMAGE",
           "type": "IMAGE",
           "links": [
-            1,
             20
           ]
         },
@@ -409,14 +348,6 @@
   ],
   "links": [
     [
-      1,
-      1,
-      0,
-      2,
-      0,
-      "IMAGE"
-    ],
-    [
       7,
       1,
       3,
@@ -439,14 +370,6 @@
       10,
       1,
       "IMAGE"
-    ],
-    [
-      21,
-      2,
-      1,
-      10,
-      2,
-      "MASK"
     ],
     [
       22,
