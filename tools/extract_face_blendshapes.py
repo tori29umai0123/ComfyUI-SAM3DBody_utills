@@ -53,21 +53,24 @@ FBX_PATH = HERE / "bone_backup" / "all_parts_bs.fbx"
 
 
 def _resolve_active_pack_dir() -> Path:
-    """Read active_preset.ini to find the active preset pack. Blender's
-    bundled Python can't import our `nodes.preset_pack` module (no
-    package context when called via --python), so we re-parse the ini
-    here with only stdlib."""
+    """Read config.ini (or legacy active_preset.ini) to find the active
+    preset pack. Blender's bundled Python can't import our
+    ``nodes.preset_pack`` module (no package context when called via
+    --python), so we re-parse the ini here with only stdlib."""
     import configparser
-    ini = NODE_ROOT / "active_preset.ini"
     name = "default"
-    if ini.exists():
+    for ini_name in ("config.ini", "active_preset.ini"):
+        ini = NODE_ROOT / ini_name
+        if not ini.exists():
+            continue
         try:
             cp = configparser.ConfigParser()
             cp.read(ini, encoding="utf-8")
             name = cp.get("active", "pack", fallback="default").strip() or "default"
+            break
         except Exception as exc:
-            print(f"[extract_face_blendshapes] active_preset.ini parse "
-                  f"failed: {exc}; using 'default'")
+            print(f"[extract_face_blendshapes] {ini_name} parse "
+                  f"failed: {exc}; trying next source")
     pack_dir = NODE_ROOT / "presets" / name
     if not pack_dir.is_dir():
         pack_dir = NODE_ROOT / "presets" / "default"

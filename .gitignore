@@ -107,3 +107,13 @@ presets/*/chara_settings_presets/autosave.json
 # `web/js/autosave_apply.js` is part of this extension, not a generated
 # viewer bundle. `tools/bone_backup/mhr_reference.obj` is the reference
 # mesh shipped with the package. Don't add `web/` or `*.obj` patterns.
+
+# editor runtime tmp (mesh.obj / mask.png written by /sam3d/api/process)
+nodes/editor_tmp/
+
+# ==========================================================================
+# Migration / config backups (never commit)
+# ==========================================================================
+# Created by tools/migrate_workflows.py and tools/strip_process_image_output.py
+*.bak
+*.bak-*

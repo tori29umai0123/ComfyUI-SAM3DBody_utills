@@ -27,7 +27,8 @@ from .process import (
 )
 
 
-_DEFAULT_BLENDER = "C:/Program Files/Blender Foundation/Blender 4.1/blender.exe"
+from ..preset_pack import get_blender_exe_path, set_blender_exe_path
+
 _UTILS_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 _BUILD_SCRIPT = os.path.join(_UTILS_ROOT, "tools", "build_rigged_fbx.py")
 
@@ -123,8 +124,11 @@ class SAM3DBodyExportRiggedFBX:
                                "body_pose_params / hand_pose_params / global_rot を含む JSON。",
                 }),
                 "blender_exe": ("STRING", {
-                    "default": _DEFAULT_BLENDER,
-                    "tooltip": "blender.exe のパス (subprocess 呼び出し)",
+                    "default": get_blender_exe_path(),
+                    "tooltip": "blender.exe のパス (subprocess 呼び出し)。\n"
+                               "ノードを実行すると、ここに入力した値が config.ini "
+                               "[blender] exe_path に保存され、次から新しいノードの"
+                               "デフォルトとして使われます。",
                 }),
                 "output_filename": ("STRING", {
                     "default": "sam3d_rigged.fbx",
@@ -141,6 +145,14 @@ class SAM3DBodyExportRiggedFBX:
 
     def export(self, model, character_json, pose_json, blender_exe, output_filename):
         import folder_paths
+
+        # Persist the supplied Blender path so the next freshly-added export
+        # node defaults to it. No-op if the value matches what's already in
+        # config.ini, so re-running an existing node doesn't churn the file.
+        try:
+            set_blender_exe_path(blender_exe)
+        except Exception as exc:
+            print(f"[SAM3DBody] config.ini blender path save failed: {exc}")
 
         try:
             preset = json.loads(character_json) if character_json.strip() else {}

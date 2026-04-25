@@ -1,8 +1,8 @@
 {
   "id": "c4a72d4a-2f17-4a54-be55-f0c057228a17",
   "revision": 0,
-  "last_node_id": 132,
-  "last_link_id": 438,
+  "last_node_id": 134,
+  "last_link_id": 439,
   "nodes": [
     {
       "id": 52,
@@ -18,7 +18,7 @@
       "flags": {
         "collapsed": false
       },
-      "order": 2,
+      "order": 3,
       "mode": 0,
       "inputs": [
         {
@@ -67,7 +67,7 @@
         130
       ],
       "flags": {},
-      "order": 4,
+      "order": 5,
       "mode": 0,
       "inputs": [
         {
@@ -161,7 +161,7 @@
         102
       ],
       "flags": {},
-      "order": 6,
+      "order": 7,
       "mode": 0,
       "inputs": [
         {
@@ -270,7 +270,7 @@
         122
       ],
       "flags": {},
-      "order": 3,
+      "order": 4,
       "mode": 0,
       "inputs": [
         {
@@ -297,11 +297,6 @@
           "links": [
             428
           ]
-        },
-        {
-          "name": "image",
-          "type": "IMAGE",
-          "links": null
         }
       ],
       "properties": {
@@ -327,7 +322,7 @@
         270
       ],
       "flags": {},
-      "order": 7,
+      "order": 8,
       "mode": 0,
       "inputs": [
         {
@@ -347,59 +342,18 @@
       ]
     },
     {
-      "id": 66,
-      "type": "ttN textDebug",
-      "pos": [
-        1713.0509494365353,
-        -667.877823259899
-      ],
-      "size": [
-        295.2723514249642,
-        241.04820297373203
-      ],
-      "flags": {},
-      "order": 8,
-      "mode": 0,
-      "inputs": [
-        {
-          "name": "text",
-          "type": "STRING",
-          "link": 431
-        }
-      ],
-      "outputs": [
-        {
-          "name": "text",
-          "type": "STRING",
-          "links": null
-        }
-      ],
-      "properties": {
-        "cnr_id": "comfyui_tinyterranodes",
-        "ver": "b5bb57f4b13463bd31355edf0aeb83c57ff795b3",
-        "Node name for S&R": "ttN textDebug",
-        "ttNnodeVersion": "1.0."
-      },
-      "widgets_values": [
-        false,
-        "",
-        "Always",
-        "{\n  \"body_params\": {\n    \"fat\": -0.5,\n    \"muscle\": 0.0,\n    \"fat_muscle\": 0.0,\n    \"limb_girth\": 0.0,\n    \"limb_muscle\": 0.0,\n    \"limb_fat\": 0.0,\n    \"chest_shoulder\": 0.0,\n    \"waist_hip\": 0.0,\n    \"thigh_calf\": 0.0\n  },\n  \"bone_lengths\": {\n    \"torso\": 0.9,\n    \"neck\": 0.9,\n    \"arm\": 1.0,\n    \"leg\": 1.0\n  },\n  \"blendshapes\": {\n    \"MuscleScale\": 0.0,\n    \"breast_flat\": 0.0,\n    \"breast_full\": 0.3,\n    \"chest_slim\": 0.4,\n    \"chin_sharp\": 0.0,\n    \"face_big\": 0.03,\n    \"face_manga\": 1.0,\n    \"face_mangabig\": 0.0,\n    \"face_small\": 0.0,\n    \"face_wide\": 0.0,\n    \"foot_big\": 0.0,\n    \"hand_big\": 0.0,\n    \"limb_thick\": 0.0,\n    \"limb_thin\": 0.0,\n    \"neck_thick\": 0.5,\n    \"neck_thin\": 0.3,\n    \"shoulder_narrow\": 0.9,\n    \"shoulder_slope\": 0.5,\n    \"shoulder_wide\": 0.0,\n    \"waist_slim\": 0.5\n  }\n}"
-      ]
-    },
-    {
-      "id": 124,
-      "type": "SAM3DBodyRenderFromJson",
+      "id": 134,
+      "type": "SAM3DBodyRenderFromPoseAndCharaJson",
       "pos": [
         863.5512918187882,
         -750.2589637978243
       ],
       "size": [
         462.15,
-        1086
+        320
       ],
       "flags": {},
-      "order": 5,
+      "order": 6,
       "mode": 0,
       "inputs": [
         {
@@ -420,34 +374,35 @@
             "name": "pose_json"
           },
           "link": 428
+        },
+        {
+          "name": "chara_json",
+          "type": "STRING",
+          "widget": {
+            "name": "chara_json"
+          },
+          "link": 439
         }
       ],
       "outputs": [
         {
           "name": "image",
           "type": "IMAGE",
+          "slot_index": 0,
           "links": [
             430,
             432
-          ]
-        },
-        {
-          "name": "settings_json",
-          "type": "STRING",
-          "links": [
-            431
           ]
         }
       ],
       "properties": {
         "aux_id": "tori29umai0123/ComfyUI-SAM3DBody_utills",
-        "ver": "0.2.1",
-        "Node name for S&R": "SAM3DBodyRenderFromJson",
-        "cnr_id": "comfyui-sam3dbody_utills"
+        "ver": "0de650cee18b821369cd98fe43dfcd8e3e5f8a10",
+        "Node name for S&R": "SAM3DBodyRenderFromPoseAndCharaJson"
       },
       "widgets_values": [
         "{}",
-        "female",
+        "{}",
         0,
         0,
         1,
@@ -455,35 +410,69 @@
         0,
         0,
         0,
+        0
+      ]
+    },
+    {
+      "id": 133,
+      "type": "SAM3DBodySettingCharaJson",
+      "pos": [
+        403.5512918187882,
+        -750.2589637978243
+      ],
+      "size": [
+        380,
+        1086
+      ],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "chara_json",
+          "type": "STRING",
+          "slot_index": 0,
+          "links": [
+            439
+          ]
+        }
+      ],
+      "properties": {
+        "aux_id": "tori29umai0123/ComfyUI-SAM3DBody_utills",
+        "ver": "0de650cee18b821369cd98fe43dfcd8e3e5f8a10",
+        "Node name for S&R": "SAM3DBodySettingCharaJson"
+      },
+      "widgets_values": [
+        "male",
+        -1,
         0,
-        -0.5,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0.9,
-        0.9,
-        1,
-        1,
-        0.03,
-        0,
-        0,
-        1,
         0,
         0,
         0.5,
-        0.3,
-        0.3,
         0,
-        0.4,
+        0.5,
         0,
-        0.9,
+        0,
+        1,
+        1,
+        1,
+        1,
+        0,
+        0,
+        0,
         0.5,
-        0.5,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
         0,
         0,
         0,
@@ -553,7 +542,7 @@
       426,
       123,
       0,
-      124,
+      134,
       0,
       "SAM3D_MODEL"
     ],
@@ -561,7 +550,7 @@
       427,
       51,
       0,
-      124,
+      134,
       1,
       "IMAGE"
     ],
@@ -569,43 +558,43 @@
       428,
       45,
       0,
-      124,
+      134,
       2,
       "STRING"
     ],
     [
       430,
-      124,
+      134,
       0,
       95,
       1,
       "IMAGE"
     ],
     [
-      431,
-      124,
-      1,
-      66,
-      0,
-      "STRING"
-    ],
-    [
       432,
-      124,
+      134,
       0,
       125,
       0,
       "IMAGE"
+    ],
+    [
+      439,
+      133,
+      0,
+      134,
+      3,
+      "STRING"
     ]
   ],
   "groups": [],
   "config": {},
   "extra": {
     "ds": {
-      "scale": 0.8390545288824205,
+      "scale": 0.4736244074476814,
       "offset": [
-        646.5475410463607,
-        1628.5035306932555
+        1486.5649110661075,
+        1571.5651972629753
       ]
     },
     "frontendVersion": "1.42.8",

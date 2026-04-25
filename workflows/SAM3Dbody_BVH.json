@@ -1,8 +1,8 @@
 {
   "id": "d9773520-bda5-4786-b1c4-81b5f6f55061",
   "revision": 0,
-  "last_node_id": 139,
-  "last_link_id": 444,
+  "last_node_id": 141,
+  "last_link_id": 445,
   "nodes": [
     {
       "id": 52,
@@ -206,7 +206,7 @@
         246
       ],
       "flags": {},
-      "order": 11,
+      "order": 10,
       "mode": 0,
       "inputs": [
         {
@@ -255,43 +255,6 @@
       ]
     },
     {
-      "id": 131,
-      "type": "ImageColorToMask",
-      "pos": [
-        126.79675137986652,
-        -632.9109031619548
-      ],
-      "size": [
-        270,
-        58
-      ],
-      "flags": {},
-      "order": 4,
-      "mode": 0,
-      "inputs": [
-        {
-          "name": "image",
-          "type": "IMAGE",
-          "link": 436
-        }
-      ],
-      "outputs": [
-        {
-          "name": "MASK",
-          "type": "MASK",
-          "links": null
-        }
-      ],
-      "properties": {
-        "cnr_id": "comfy-core",
-        "ver": "0.18.1",
-        "Node name for S&R": "ImageColorToMask"
-      },
-      "widgets_values": [
-        0
-      ]
-    },
-    {
       "id": 123,
       "type": "LoadSAM3DBodyModel",
       "pos": [
@@ -303,7 +266,7 @@
         58
       ],
       "flags": {},
-      "order": 2,
+      "order": 1,
       "mode": 0,
       "inputs": [],
       "outputs": [
@@ -339,7 +302,7 @@
         122
       ],
       "flags": {},
-      "order": 6,
+      "order": 4,
       "mode": 0,
       "inputs": [
         {
@@ -367,11 +330,6 @@
             428,
             444
           ]
-        },
-        {
-          "name": "image",
-          "type": "IMAGE",
-          "links": null
         }
       ],
       "properties": {
@@ -397,7 +355,7 @@
         307.30362419174116
       ],
       "flags": {},
-      "order": 10,
+      "order": 6,
       "mode": 0,
       "inputs": [
         {
@@ -443,74 +401,38 @@
       ]
     },
     {
-      "id": 124,
-      "type": "SAM3DBodyRenderFromJson",
+      "id": 140,
+      "type": "SAM3DBodySettingCharaJson",
       "pos": [
-        863.5512918187882,
+        403.5512918187882,
         -750.2589637978243
       ],
       "size": [
-        462.15,
+        380,
         1086
       ],
       "flags": {},
-      "order": 7,
+      "order": 2,
       "mode": 0,
-      "inputs": [
-        {
-          "name": "model",
-          "type": "SAM3D_MODEL",
-          "link": 426
-        },
-        {
-          "name": "background_image",
-          "shape": 7,
-          "type": "IMAGE",
-          "link": 427
-        },
-        {
-          "name": "pose_json",
-          "type": "STRING",
-          "widget": {
-            "name": "pose_json"
-          },
-          "link": 428
-        }
-      ],
+      "inputs": [],
       "outputs": [
         {
-          "name": "image",
-          "type": "IMAGE",
-          "links": [
-            430,
-            432
-          ]
-        },
-        {
-          "name": "settings_json",
+          "name": "chara_json",
           "type": "STRING",
+          "slot_index": 0,
           "links": [
+            445,
             443
           ]
         }
       ],
       "properties": {
         "aux_id": "tori29umai0123/ComfyUI-SAM3DBody_utills",
-        "ver": "0.2.1",
-        "Node name for S&R": "SAM3DBodyRenderFromJson",
-        "cnr_id": "comfyui-sam3dbody_utills"
+        "ver": "0de650cee18b821369cd98fe43dfcd8e3e5f8a10",
+        "Node name for S&R": "SAM3DBodySettingCharaJson"
       },
       "widgets_values": [
-        "{}",
         "male",
-        0,
-        0,
-        1,
-        0,
-        0,
-        0,
-        0,
-        0,
         -1,
         0,
         0,
@@ -539,6 +461,78 @@
         0,
         0,
         0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "id": 141,
+      "type": "SAM3DBodyRenderFromPoseAndCharaJson",
+      "pos": [
+        863.5512918187882,
+        -750.2589637978243
+      ],
+      "size": [
+        462.15,
+        320
+      ],
+      "flags": {},
+      "order": 7,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "model",
+          "type": "SAM3D_MODEL",
+          "link": 426
+        },
+        {
+          "name": "background_image",
+          "shape": 7,
+          "type": "IMAGE",
+          "link": 427
+        },
+        {
+          "name": "pose_json",
+          "type": "STRING",
+          "widget": {
+            "name": "pose_json"
+          },
+          "link": 428
+        },
+        {
+          "name": "chara_json",
+          "type": "STRING",
+          "widget": {
+            "name": "chara_json"
+          },
+          "link": 445
+        }
+      ],
+      "outputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "slot_index": 0,
+          "links": [
+            430,
+            432
+          ]
+        }
+      ],
+      "properties": {
+        "aux_id": "tori29umai0123/ComfyUI-SAM3DBody_utills",
+        "ver": "0de650cee18b821369cd98fe43dfcd8e3e5f8a10",
+        "Node name for S&R": "SAM3DBodyRenderFromPoseAndCharaJson"
+      },
+      "widgets_values": [
+        "{}",
+        "{}",
+        0,
+        0,
+        1,
         0,
         0,
         0,
@@ -608,7 +602,7 @@
       426,
       123,
       0,
-      124,
+      141,
       0,
       "SAM3D_MODEL"
     ],
@@ -616,7 +610,7 @@
       427,
       51,
       0,
-      124,
+      141,
       1,
       "IMAGE"
     ],
@@ -624,13 +618,13 @@
       428,
       45,
       0,
-      124,
+      141,
       2,
       "STRING"
     ],
     [
       430,
-      124,
+      141,
       0,
       95,
       1,
@@ -638,7 +632,7 @@
     ],
     [
       432,
-      124,
+      141,
       0,
       125,
       0,
@@ -654,8 +648,8 @@
     ],
     [
       443,
-      124,
-      1,
+      140,
+      0,
       139,
       1,
       "STRING"
@@ -667,16 +661,24 @@
       139,
       2,
       "STRING"
+    ],
+    [
+      445,
+      140,
+      0,
+      141,
+      3,
+      "STRING"
     ]
   ],
   "groups": [],
   "config": {},
   "extra": {
     "ds": {
-      "scale": 0.47362440744768775,
+      "scale": 0.6934334949441607,
       "offset": [
-        1812.078525510307,
-        1705.329433369645
+        605.7417852790047,
+        1429.5511435512226
       ]
     },
     "frontendVersion": "1.42.8",

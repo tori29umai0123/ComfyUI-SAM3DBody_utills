@@ -2,7 +2,15 @@
 
 **Language:** [🇯🇵 日本語](README.md) ・ 🇬🇧 English (current)
 
-A streamlined fork of **[PozzettiAndrea/ComfyUI-SAM3DBody](https://github.com/PozzettiAndrea/ComfyUI-SAM3DBody)** focused on turning a single pose image into a reusable, rigged, posable 3D character inside ComfyUI.
+A streamlined fork of **[PozzettiAndrea/ComfyUI-SAM3DBody](https://github.com/PozzettiAndrea/ComfyUI-SAM3DBody)** focused on **building a rigged 3D character from a single image** inside ComfyUI.
+
+## ✏ Turn clumsy doodles into a pose reference
+
+![sample4](docs/sample4.png)
+
+**From left to right:** ① the character you want to finish ・ ② **a quick hand-drawn rough** ・ ③ the 3D character body this plugin renders (the rough's pose mapped onto your character's body shape) ・ ④ ③ run through an image-edit model for the final output.
+
+You don't need to draw well — as long as the pose reads, this plugin can convert a **stick-figure doodle into a pose reference with correct proportions and 3D consistency**. Hand ③ to img2img / Qwen-Image-Edit and you can carry it all the way to a finished frame like ④ in one shot.
 
 ## What this plugin does
 
@@ -12,29 +20,41 @@ Extract the pose from any character image, then render it onto a 3D character bo
 
 ![sample1](docs/sample1.png)
 
-### 2. Export a rigged, animated FBX
+### 2. Export a rigged, animated FBX / BVH
 
-Write the same posed character out as a rigged FBX — **armature + skinned mesh + pose animation** — straight into `<ComfyUI>/output/`. Drop it into Blender / Unity / Unreal Engine as-is. (This one feature needs Blender installed.)
+Write the same posed character out as an FBX containing **armature + skinned mesh + pose animation** to `<ComfyUI>/output/`. The FBX opens directly in Blender / Unity / Unreal Engine; the BVH variant is confirmed to load in CLIP STUDIO PAINT.
 
 ![sample2](docs/sample2.png)
 
-### 3. Export motion-captured FBX from a video
+### 3. Export motion-captured FBX / BVH from a video
 
-Feed a video via `ComfyUI-VideoHelperSuite`'s `VHS_LoadVideo` and get an animated FBX that **rigs the character once at the rest pose and bakes every frame of the video as a keyframe**. Drop it into Unity and you have a ready-to-play motion clip (Blender required).
+Feed a video via `ComfyUI-VideoHelperSuite`'s `VHS_LoadVideo` and the plugin runs SAM 3D Body on every frame, then bakes the **continuous motion onto a character rigged at the rest pose**, writing it to `<ComfyUI>/output/` as an animated FBX. Drop it into Unity and you have a ready-to-play motion clip in Animator / Timeline. The BVH variant is confirmed to load in CLIP STUDIO PAINT.
 
 <!-- DEMO_VIDEO_START -->
 https://github.com/user-attachments/assets/4fa43a56-8dd2-4ebf-8abe-61a31ff14e6f
 <!-- DEMO_VIDEO_END -->
 
-## The five nodes
+## Included nodes (10 total)
 
+### Model / inference
 1. **Load SAM 3D Body Model** — lazy-loads the checkpoint from `<ComfyUI>/models/sam3dbody/`.
 2. **SAM 3D Body: Process Image to Pose JSON** — runs SAM 3D Body on the input image and emits the pose as JSON.
-3. **SAM 3D Body: Render Human From Pose JSON** — renders an MHR neutral body in the estimated pose, with full slider control over body shape, bone length, and FBX-sourced blend shapes.
-4. **SAM 3D Body: Export Rigged FBX** — writes an armature + skinned mesh + posed animation FBX to `<ComfyUI>/output/`. (Blender required)
-5. **SAM 3D Body: Export Animated FBX** — writes an animated FBX baked from a video (IMAGE batch). The character is rigged once at the rest pose, then every frame becomes a keyframe. (Blender required)
-6. **SAM 3D Body: Export Posed BVH** — writes a single-pose humanoid-compatible BVH to `<ComfyUI>/output/`. (Blender required)
-7. **SAM 3D Body: Export Animated BVH** — writes an animated BVH from a video (IMAGE batch) or a supplied pose array. (Blender required)
+   - When the `mask` input is left unconnected, falls back to internal BiRefNet Lite auto-masking
+   - For higher tracking accuracy on tricky footage, connect an explicit `MASK` node
+
+### Character authoring / rendering
+3. **SAM 3D Body: Setting Chara JSON** — bundles the preset selector + body / bone / blendshape sliders and emits `chara_json` (STRING). Split out from the old render node so character state can be authored once and reused.
+4. **SAM 3D Body: Render Human From Pose And Chara JSON** — takes `pose_json` + `chara_json` as inputs; the only widget-driven controls left are camera (`offset_x/y` / `scale_offset` / `camera_yaw/pitch_deg` / `width` / `height`) and lean correction (`pose_adjust`).
+
+### Web-UI editors (in-page browser modals, JA/EN switchable)
+5. **SAM 3D Body: Pose Editor** — click "Open Pose Editor" to launch. Upload an image → segmentation + pose inference → fine-tune bones in the 3D viewport → confirm to emit `pose_json` (STRING) plus `width` / `height` (INT).
+6. **SAM 3D Body: Character Editor** — click "Open Character Editor" to launch. Sculpt the body with sliders + 3D preview; confirm to emit `chara_json` (STRING).
+
+### FBX / BVH export (all Blender-required)
+7. **SAM 3D Body: Export Rigged FBX** — writes an armature + skinned mesh + posed animation FBX to `<ComfyUI>/output/`.
+8. **SAM 3D Body: Export Animated FBX** — writes an animated FBX baked from a video (IMAGE batch). The character is rigged once at the rest pose, then every frame becomes a keyframe.
+9. **SAM 3D Body: Export Posed BVH** — writes a single-pose humanoid-compatible BVH to `<ComfyUI>/output/`.
+10. **SAM 3D Body: Export Animated BVH** — writes an animated BVH from a video (IMAGE batch) or a supplied pose array.
 
 Based on Meta's **SAM 3D Body** + **Momentum Human Rig (MHR)**; both libraries are vendored under their original licenses. See the [License](#license) section.
 
@@ -44,7 +64,7 @@ Based on Meta's **SAM 3D Body** + **Momentum Human Rig (MHR)**; both libraries a
 
 - ComfyUI already installed (Python 3.11 recommended)
 - Windows / Linux / macOS (tested on Windows 11 + Python 3.11)
-- **Blender 4.1 or newer** (needed by some features — see below)
+- **Blender 4.1 or newer** (required by some features — see below)
 - NVIDIA GPU (CUDA) strongly recommended — see VRAM requirements below
 
 ### GPU / VRAM requirements
@@ -69,24 +89,28 @@ SAM 3D Body keeps ~3.4 GB of weights resident on the GPU; inference activations 
 
 > The model is cached at module scope (`_MODEL_CACHE`), so re-running the node does not allocate additional VRAM. CPU inference works but is much slower; CUDA is strongly recommended.
 
-### ⚠ Features that require Blender
+### Features that require Blender ⚠
 
-The following features spawn `blender.exe` as a subprocess and will not work without it:
+The following features need **[Blender](https://www.blender.org/) installed**. Tested with Blender 4.1 (`C:/Program Files/Blender Foundation/Blender 4.1/blender.exe`).
 
 | Feature | Why Blender is needed |
 |---|---|
 | **Adding / editing blend shapes** | Edit shape keys on `tools/bone_backup/all_parts_bs.fbx` in the Blender GUI, then re-run `tools/extract_face_blendshapes.py` headless to rebuild `presets/face_blendshapes.npz` |
-| **`SAM 3D Body: Export Rigged FBX` node** | Calls `blender.exe --background --python tools/build_rigged_fbx.py` internally to build the armature, weld skin weights to vertex groups, and write the FBX |
-| **`SAM 3D Body: Export Animated FBX` node** | Calls `blender.exe --background --python tools/build_animated_fbx.py` internally to bake per-frame rotation keyframes from the input video and write the animated FBX |
-| **`SAM 3D Body: Export Posed BVH` node** | Calls `blender.exe --background --python tools/build_rigged_bvh.py` internally to build and export a single-pose BVH |
-| **`SAM 3D Body: Export Animated BVH` node** | Calls `blender.exe --background --python tools/build_animated_bvh.py` internally to bake and export an animated BVH |
+| **`SAM 3D Body: Export Rigged FBX` node** | Calls `blender.exe --background --python tools/build_rigged_fbx.py` internally to assemble the armature / mesh / LBS weights / posed animation and export the FBX |
+| **`SAM 3D Body: Export Animated FBX` node** | Calls `blender.exe --background --python tools/build_animated_fbx.py` internally to bake per-frame rotation keyframes from the input video and export the animated FBX |
+| **`SAM 3D Body: Export Posed BVH` node** | Calls `blender.exe --background --python tools/build_rigged_bvh.py` internally to export a single-pose BVH |
+| **`SAM 3D Body: Export Animated BVH` node** | Calls `blender.exe --background --python tools/build_animated_bvh.py` internally to export a BVH from a video or pose array |
 
-**When Blender is not required:** if you only want to render existing characters in ComfyUI using the shipped 18 blend shapes and bundled presets (the `Load → ProcessToJson → Render` chain of three nodes), Blender does not need to be installed at all.
+Blender downloads:
 
-### Standard installation
+- Win/x64: https://download.blender.org/release/Blender4.1/blender-4.1.1-windows-x64.zip
+- Linux/x64: https://download.blender.org/release/Blender4.1/blender-4.1.1-linux-x64.tar.xz
+- Linux/ARM: https://github.com/tori29umai0123/SAM3DBody_utills/releases/download/blender-arm64-v1.0/ARM_blender41-portable.tar.xz
 
-1. Clone this repo under `<ComfyUI>/custom_nodes/`
-2. From the ComfyUI venv run:
+### Standard installation (recommended)
+
+1. Place this repo under `C:\ComfyUI\custom_nodes\` (right under ComfyUI's `custom_nodes/`)
+2. From the ComfyUI Python environment run:
 
    ```
    cd C:/ComfyUI/custom_nodes/ComfyUI-SAM3DBody_utills
@@ -96,89 +120,23 @@ The following features spawn `blender.exe` as a subprocess and will not work wit
 
 3. Launch ComfyUI — on first run the SAM 3D Body weights (~1.5 GB) auto-download from `jetjodh/sam-3d-body-dinov3` into `<ComfyUI>/models/sam3dbody/`.
 
-### Manual installation
+### Manual installation steps
 
-#### 1. Bootstrap dependencies
+For when the auto-downloader fails or you want finer control over the environment.
+
+#### 1. Install bootstrap dependencies
 
 ```
 C:/ComfyUI/.venv/Scripts/python.exe -m pip install -r requirements.txt
 ```
 
-This installs `comfy-env`, `comfy-3d-viewers`, `numpy`, `pillow`, `opencv-python-headless` into the main venv.
+This puts the lightweight bootstrap deps (`comfy-env`, `comfy-3d-viewers`, `numpy`, `pillow`, `opencv-python-headless`, …) into the main venv.
 
-#### 2. Set up the isolated environment for heavy dependencies
+#### 2. Set up the isolated environment (heavy dependencies)
 
 ```
 C:/ComfyUI/.venv/Scripts/python.exe install.py
 ```
-
-`install.py` calls `from comfy_env import install; install()` which builds a pixi-backed isolated environment (`_env_*/` folders) holding the ~30 heavy dependencies declared in `nodes/comfy-env.toml` (`torch`, `bpy`, `trimesh`, `transformers`, `huggingface-hub`, `xtcocotools`, `pytorch-lightning`, `pyrender`, `hydra-core`, …).
-
-> **macOS note:** `xtcocotools` may fail to build in some setups. `install.py` retries with `--no-build-isolation` automatically; for manual recovery run `pip install --no-build-isolation xtcocotools`.
-
-#### 3. Place the SAM 3D Body model weights
-
-Usually the auto-downloader takes care of this on first launch.
-
-#### 4. Verify startup
-
-A successful startup prints:
-
-```
-[SAM3DBody] Registered server routes:
-[SAM3DBody]   GET  /sam3d/autosave
-[SAM3DBody]   GET  /sam3d/preset/{name}
-```
-
-In the node menu you should see the `SAM3DBody` category with four nodes.
-
-### Troubleshooting
-
-| Symptom | Fix |
-|---|---|
-| No SAM 3D Body category in the node menu | Check the ComfyUI console for `[SAM3DBody]` errors. Make sure both `pip install -r requirements.txt` AND `python install.py` have been run. |
-| Model download fails | Place the files manually per step 3. |
-| `comfy_env` fails to import | Verify `requirements.txt` is installed — `comfy-env==0.1.91` must be on the path. |
-| `bpy` (Blender module) fails at import | `bpy` is installed into the isolated environment by `install.py`. Re-run it. |
-
-### ⚠ Editing blend shapes requires Blender (advanced users)
-
-> **This section is for Blender users who want to author their own blend shapes or tweak existing ones.** If you only want to render using the 18 shipped blend shapes, you can skip it entirely — Blender is not required for that workflow.
->
-> **Why Blender is required:** editing shape keys on the source FBX in the GUI, then re-running `tools/extract_face_blendshapes.py` headless to regenerate `presets/face_blendshapes.npz`.
-
-The plugin's blend shapes live as **shape keys** on `tools/bone_backup/all_parts_bs.fbx`. Any add / edit / value change must be done in [Blender](https://www.blender.org/).
-
-- **Tested with:** Blender 4.1 (`C:/Program Files/Blender Foundation/Blender 4.1/blender.exe`). Other versions likely work, but the hardcoded path inside `tools/extract_face_blendshapes.py` assumes 4.1.
-
-Workflow:
-
-1. Open `tools/bone_backup/all_parts_bs.fbx` in Blender
-2. Add / edit / rename shape keys on the `mhr_reference` object
-3. Save as FBX (use the export settings below)
-4. From a shell, run `tools/extract_face_blendshapes.py` via headless Blender — it auto-syncs `presets/face_blendshapes.npz` + `chara_settings_presets/*.json` + `process.py`'s `_UI_BLENDSHAPE_ORDER`
-
-#### FBX export settings
-
-![Blender FBX export settings](docs/blender_fbx_export_settings.png)
-
-| Option | Value |
-|---|---|
-| Path Mode | Automatic |
-| Batch Mode | Off |
-| **Limit to** | **all OFF** (don't check Selected / Visible / Active Collection) |
-| **Object Types** | **Armature + Mesh** only |
-| Custom Properties | OFF |
-| **Scale** | **1.00** |
-| **Apply Scalings** | **FBX All** |
-| **Forward** | **-Z Forward** |
-| **Up** | **Y Up** |
-| Apply Unit | ON |
-| Use Space Transform | ON |
-| Apply Transform | ON |
-| Bake Animation | ON |
-
-**Important:** Forward = -Z / Up = Y / Scale 1.0 are required to match the internal axis-swap matrix `_FBX_TO_MHR_ROT`. Other axis setups will misalign the extracted blend-shape deltas.
 
 ## License
 
@@ -194,14 +152,13 @@ This project uses a **multi-license structure**. The "what is under which licens
 
 See [LICENSE](LICENSE) for the top-level summary and [THIRD_PARTY_NOTICES](docs/licenses/THIRD_PARTY_NOTICES) for third-party attributions.
 
-### Summary
+### Using This Project
 
 - ✅ Wrapper code is free to use, modify, and redistribute under MIT
 - ✅ SAM 3D Body is usable for research and commercial purposes under the SAM License
 - ✅ MHR (and any blend-shape / region data derived from its topology) is usable commercially under Apache 2.0
-- ⚠ When redistributing, ship **LICENSE-MIT + LICENSE-SAM + LICENSE-MHR + NOTICE-MHR**
-- ⚠ If you contract out blend-shape authoring against the MHR topology, the contractor's output is a derivative work under Apache 2.0 — keep the MHR attribution in any deliverable that ships the mesh or its deltas
-- ⚠ Acknowledge SAM 3D Body in publications (required by the SAM License)
+- ⚠️ When redistributing, ship **LICENSE-MIT + LICENSE-SAM + LICENSE-MHR + NOTICE-MHR**
+- ⚠️ Acknowledge SAM 3D Body in publications (required by the SAM License)
 
 ## Community
 
@@ -209,43 +166,35 @@ For issues and feature requests specific to this fork, use the [tori29umai0123/C
 
 For SAM 3D Body / MHR core topics and upstream plugin chat, see the [PozzettiAndrea/ComfyUI-SAM3DBody Discussions](https://github.com/PozzettiAndrea/ComfyUI-SAM3DBody/discussions) and the [Comfy3D Discord](https://discord.gg/bcdQCUjnHE).
 
-## Preset packs (distributable blend-shape definitions)
-
-This plugin bundles its blend-shape definitions, vertex mapping, and character preset JSONs into a single unit called a **preset pack**. The pack system exists so users can author their own blend-shape sets and share them with others as self-contained folders.
-
-### Switching packs
-
-To use a pack someone else shared (say `my_custom_pack`):
-
-1. Drop the pack folder into `presets/my_custom_pack/` (same layout as above)
-2. Change `active_preset.ini` from `pack = default` to `pack = my_custom_pack`
-3. Reload ComfyUI (F5)
-
-If the named pack is missing, the runtime falls back to `default` automatically.
-
-### Creating your own pack
-
-1. Copy `presets/default/` to `presets/my_pack/`
-2. Edit `active_preset.ini` so `pack = my_pack`
-3. Open `tools/bone_backup/all_parts_bs.fbx` in Blender and add / edit the shape keys you want
-4. Run `tools/extract_face_blendshapes.py` — it writes into the active pack (`my_pack`), regenerates `face_blendshapes.npz`, and auto-syncs both `chara_settings_presets/*.json` and `process.py`'s `_UI_BLENDSHAPE_ORDER`
-5. Optionally run `tools/rebuild_vertex_jsons.py` to refresh `mhr_reference_vertices.json`
-6. Zip the `presets/my_pack/` folder and distribute
-
-A pack is fully self-contained — the recipient just unzips it under `presets/` and edits `active_preset.ini`, no code change needed.
-
 ## Example workflows
 
-Six ready-made workflows ship under `workflows/`. Load them from ComfyUI's `Workflow → Open` menu. The bundled `workflows/input_image*.png` / `workflows/input_mask*.png` work as drop-in test inputs.
+Seven ready-made workflows ship under `workflows/`. Load them from ComfyUI's `Workflow → Open` menu. The bundled `workflows/input_image*.png` / `workflows/input_mask*.png` work as drop-in test inputs.
 
 | File | What it does | Needs Blender |
 |---|---|---|
+| **`SAM3Dbody_webUI.json`** | **Web-UI editor variant.** Drives `SAM 3D Body: Pose Editor` and `SAM 3D Body: Character Editor` from a fullscreen browser modal and feeds the confirmed JSON straight into the Render node — minimal scaffolding. | ❌ |
 | **`SAM3Dbody_image.json`** | Minimal image-rendering workflow. Takes the pose from your input image and renders it onto an arbitrary body shape. | ❌ |
 | **`SAM3Dbody_FBX.json`** | FBX export workflow. Takes the pose from your input image, applies it to an arbitrary body shape, and exports a rigged FBX with a posed animation track — importable into Unity / Unreal Engine. | ✅ |
 | **`SAM3Dbody_FBXAnimation.json`** | **Video motion-capture workflow.** Pipes a video loaded via `VHS_LoadVideo` into `SAM 3D Body: Export Animated FBX` and writes an animated FBX covering every frame. | ✅ |
 | **`SAM3Dbody_ BVH.json`** | BVH export workflow. Takes the pose from your input image, applies it to an arbitrary body shape, and exports a single-pose BVH. No 3D preview node is included. | ✅ |
 | **`SAM3Dbody_BVHAnimation.json`** | **Video motion-capture BVH workflow.** Pipes a video loaded via `VHS_LoadVideo` into `SAM 3D Body: Export Animated BVH` and writes an animated BVH covering every frame. No 3D preview node is included. | ✅ |
 | **`SAM3Dbody _QIE_VNCCSpose.json`** | A real-world usage example. Combines [Qwen-Image-Edit-2511](https://huggingface.co/Qwen/Qwen-Image-Edit) + the VNCCSpose LoRA: extract the pose from a reference character of a different body shape, render it onto an arbitrary 3D character body, then image-edit the result. | ❌ |
+
+### How `SAM3Dbody_webUI.json` fits together — confirm pose / character in your browser
+
+Instead of poking at slider widgets on the ComfyUI canvas, two purpose-built nodes open a **fullscreen modal inside the browser** with a 3D preview, segmentation + pose estimation, and bone editing baked in. The confirmed JSON is stored in the workflow file so re-opening the node never loses your work. The UI has a JA / EN toggle.
+
+#### `SAM 3D Body: Pose Editor` — confirm the pose in the browser
+
+![Pose Editor](docs/sample5.png)
+
+The node carries an **"Open Pose Editor"** button. Click it to upload an image, run segmentation + pose inference, fine-tune bones in the 3D viewport (rotation / IK translate / lean correction), and finally hit **"Confirm & Close / 確定して閉じる"**. The node then emits `pose_json` (STRING) plus the source image's `width` / `height` (INT) so it plugs straight into `SAM 3D Body: Render Human From Pose And Chara JSON`.
+
+#### `SAM 3D Body: Character Editor` — confirm the body shape in the browser
+
+![Character Editor](docs/sample6.png)
+
+Likewise the **"Open Character Editor"** button drops you into a modal where the MHR neutral T-pose body responds in real time to **9-axis PCA shape sliders, four bone-length sliders, and the face / body blendshape sliders**. You can also load `presets/<active>/chara_settings_presets/*.json` from this view. On confirm the node outputs `chara_json` (STRING) — feed it directly into the Render node, `SAM 3D Body: Export Rigged FBX`, etc.
 
 ### How `SAM3Dbody _QIE_VNCCSpose.json` fits together
 
@@ -261,107 +210,99 @@ The intended use is treating this plugin's render as an **intermediate artifact 
 
 Takes the pose estimated from an input image (`pose_json`) and renders it onto the **MHR neutral body**.
 
-- Character shape (`shape_params` / `scale_params`) from pose_json is **ignored** so the output stays rig-stable.
+- Character shape (`shape_params` / `scale_params`) from pose_json is **ignored**.
 - Only pose-ish fields (`global_rot` / `body_pose_params` / `hand_pose_params` / `expr_params`) are taken from pose_json.
 - Body shape is fully controlled by the UI sliders (`body_*` / `bone_*` / `bs_*`). All-zero sliders = perfectly neutral body.
+
+This way you can **load characters of different body types but get pose-consistent renders on a single uniform body**.
 
 ### Required inputs
 
 | Parameter | Default | Range | Notes |
 |---|---|---|---|
-| model | — | — | From the Load node |
-| pose_json | `"{}"` | — | From the Process Image to Pose JSON node |
-| preset | `autosave` | preset dropdown | `autosave` is pinned to the top as the default. Selecting a preset writes its values into the sliders (via the frontend extension) |
-| offset_x | 0.0 | −5.0 … 5.0 | Horizontal camera offset (meters, added to `camera[0]`). **Pans the subject left/right within the image** |
-| offset_y | 0.0 | −5.0 … 5.0 | Vertical camera offset. **Pans the subject up/down within the image** |
-| scale_offset | 1.0 | 0.1 … 5.0 | Camera distance multiplier. 1.0 = as-is, 0.1 = zoom in, 5.0 = zoom out |
-| camera_yaw_deg | 0.0 | −180 … 180 | **Horizontal orbit** around the subject centroid. `+` moves the camera to the viewer's right (subject appears to turn left). `±180` = back view |
-| camera_pitch_deg | 0.0 | −89 … 89 | **Vertical orbit** around the subject centroid. `+` moves the camera up (looking **down** at the subject), `−` looks **up**. The subject stays centered in the frame |
-| width | 0 | 0 … 8192 | Output width (0 → pose_json's original image size) |
-| height | 0 | 0 … 8192 | Output height (same) |
-
-> **How the camera controls compose**
-> - `camera_yaw_deg` / `camera_pitch_deg`: orbit the camera around the subject centroid (subject stays centered, only its orientation changes).
-> - `offset_x` / `offset_y`: shift the rendered subject in image space (move it off-center).
-> - `scale_offset`: dolly the camera in/out (zoom).
->
-> The three groups are independent knobs that can be combined freely. Defaults (yaw=0, pitch=0) reproduce the previous behavior exactly.
+| model | — | — | SAM 3D Body model (Load node output) |
+| pose_json | `"{}"` | — | Pose JSON (Process Image to Pose JSON node output) |
+| preset | `"none"` | — | Preset selector (currently identical for all values; preset feature is unimplemented) |
+| offset_x | 0.0 | −5.0 … 5.0 | Horizontal positional offset (added to `camera[0]` in meters). **Pans the subject left/right within the image** |
+| offset_y | 0.0 | −5.0 … 5.0 | Vertical positional offset (added to `camera[1]`). **Pans the subject up/down within the image** |
+| scale_offset | 1.0 | 0.1 … 5.0 | Camera distance **multiplier**. 1.0 = identity, 0.1 = extreme zoom in, 5.0 = zoom out |
+| camera_yaw_deg | 0.0 | −180 … 180 | **Horizontal orbit** around the subject centroid. `+` rotates the camera to the viewer's right (subject appears to turn left). `±180` = back view |
+| camera_pitch_deg | 0.0 | −89 … 89 | **Vertical orbit** around the subject centroid. `+` raises the camera (looking **down** at the subject), `−` looks **up**. The subject stays centered in the frame |
+| width | 0 | 0 … 8192 | Output width (0 = use pose_json's source image size) |
+| height | 0 | 0 … 8192 | Output height (0 = same) |
 
 ### Optional inputs
 
 | Parameter | Notes |
 |---|---|
-| background_image | Background image. If left unconnected, the background is black. |
+| background_image | Background image. If left unconnected, the background is black |
 
 ### Body Params (PCA body shape) — `body_*`
 
-Nine sliders driving the first 9 axes of MHR's 45-dim PCA body shape basis.
+Nine sliders driving the **first 9 of MHR's 45-dim PCA body shape basis**.
 
-- Default: **0.0** (neutral)
+- Default: **0.0 (neutral)**
 - Range: **−5.0 … +5.0**
-- Practical range: ±1 is subtle, ±3 is extreme, ±5 starts breaking
-- **Per-axis normalisation**: PCA basis magnitudes shrink rapidly past PC0 (~16× smaller by PC8). We multiply each slider by `[1.00, 2.78, 4.42, 8.74, 10.82, 11.70, 13.39, 13.83, 16.62]` so ±1 on any axis produces a comparable-sized deformation.
+- Practical range: ±1 is subtle, ±3 is extreme, ±5 starts to break
+- **Internally normalised**: PCA basis magnitudes shrink rapidly past PC0, so we multiply each slider internally by `[1.00, 2.78, 4.42, 8.74, 10.82, 11.70, 13.39, 13.83, 16.62]`. ±1 on any axis produces a comparable-sized deformation.
 
-Names are educated guesses at the axes' learned semantics — the actual direction may not perfectly match the label. Try them.
+Slider names are educated guesses at the axes' learned semantics — **the actual direction may not perfectly match the label** (try them).
 
-| Slider | PCA axis | Intended effect |
+| Parameter | PCA component | Intended effect |
 |---|---:|---|
-| body_fat              | `shape_params[0]` | Body fat. +/= more fat, −/= slimmer |
-| body_muscle           | `shape_params[1]` | Muscle mass. +/= muscular, −/= delicate |
+| body_fat              | `shape_params[0]` | Body fat. + = fatter, − = leaner |
+| body_muscle           | `shape_params[1]` | Muscle mass. + = muscular, − = delicate |
 | body_fat_muscle       | `shape_params[2]` | Fat vs muscle balance |
-| body_limb_girth       | `shape_params[3]` | Limb thickness |
+| body_limb_girth       | `shape_params[3]` | Limb (arm / leg) thickness |
 | body_limb_muscle      | `shape_params[4]` | Limb muscularity |
 | body_limb_fat         | `shape_params[5]` | Limb subcutaneous fat |
-| body_chest_shoulder   | `shape_params[6]` | Chest + shoulder width |
-| body_waist_hip        | `shape_params[7]` | Waist + hip thickness |
-| body_thigh_calf       | `shape_params[8]` | Thigh + calf thickness |
-
-> `shape_params[9..44]` are held at 0. `scale_params` is also 0 (MHR default skeleton scale).
+| body_chest_shoulder   | `shape_params[6]` | Chest + shoulder width. + = wider, − = narrower |
+| body_waist_hip        | `shape_params[7]` | Waist / hip thickness. + = thicker, − = slimmer |
+| body_thigh_calf       | `shape_params[8]` | Thigh / calf thickness |
 
 ### Bone length sliders — `bone_*`
 
-Four sliders that rescale link lengths along specific bone chains. Implemented as an extension of LBS with **per-joint isotropic scaling** — lengthening/shortening a bone also isotropically scales the mesh around that joint, so proportions stay locked (shrinking the torso to 0.6 gives you a short but not stubby character).
+Four sliders that rescale link lengths along specific MHR bone chains. Implemented as an extension of LBS with **per-joint isotropic scaling** — bone-length changes also isotropically scale the mesh around that joint, so proportions stay locked (`bone_torso=0.6` shrinks the torso to 0.6× **and** thins it 0.6× — you get a "short" character, not a "stubby" one).
 
 - Scale 1.0 = unchanged. 0.5 = half, 2.0 = double
-- Branch joints (`clavicle_l/r`, `thigh_l/r`) stay at 1.0 so shoulder width / hip width are preserved
+- Branch joints (`clavicle_l/r`, `thigh_l/r`) stay at 1.0 so shoulder / hip width are preserved
 - Formula: `new_posed_vert = Σ_j w_j [ s_j · R_rel[j] · (rest_V - rest_joint[j]) + new_posed_joint[j] ]`
 
-| Slider | Default | Range | Affected MHR joints |
+| Parameter | Default | Range | Affected MHR joints |
 |---|---|---|---|
-| bone_torso | 1.0 | 0.3 … 1.8 | pelvis (incl. self) → neck_01 chain (crotch through neck base). Including pelvis lets the belly mesh shrink alongside the skeleton |
-| bone_neck  | 1.0 | 0.3 … 2.0 | `neck_01` → `head` link (neck length). `head`'s own mesh_scale is pinned to 1.0 so lengthening the neck doesn't balloon the head |
-| bone_arm   | 1.0 | 0.3 … 2.0 | Descendants of `clavicle_l/r` (upperarm → lowerarm → hand → fingers) |
-| bone_leg   | 1.0 | 0.3 … 2.0 | Descendants of `thigh_l/r` (calf → foot → toes) |
+| bone_torso | 1.0 | 0.3 … 1.8 | pelvis itself + pelvis → neck_01 chain (crotch through neck base). Including pelvis lets the lower-belly mesh shrink alongside the skeleton |
+| bone_neck  | 1.0 | 0.3 … 2.0 | `neck_01` → `head` link (neck length). `head`'s own mesh_scale is pinned to 1.0 — head size unchanged, only the neck stretches |
+| bone_arm   | 1.0 | 0.3 … 2.0 | Descendants of `clavicle_l/r` (`upperarm`, `lowerarm`, `hand`, fingers) |
+| bone_leg   | 1.0 | 0.3 … 2.0 | Descendants of `thigh_l/r` (`calf`, `foot`, toes) |
 
-Implemented in `_apply_bone_length_scales` (`nodes/processing/process.py`). We split `joint_scale` (drives bone length) from `mesh_scale` (drives local isotropic mesh scale) and soften the mesh scale with `_MESH_SCALE_STRENGTH=0.5` so shrinking the bone by 40% only thins the mesh by 20% — stops the character from turning into a stick figure.
+Implemented in `_apply_bone_length_scales` (`nodes/processing/process.py`). We split `joint_scale` (drives bone length) from `mesh_scale` (drives local isotropic mesh scale) and soften the latter with `_MESH_SCALE_STRENGTH=0.5` so shrinking the bone by 40% only thins the mesh by 20%.
 
 ### Blend shapes — `bs_*`
 
-20 sliders driven by the shape keys of `tools/bone_backup/all_parts_bs.fbx`. Linearly blended into the posed mesh. Each slider defaults to **0.0** and runs **0.0 … 1.0**; combining multiple sliders is additive.
+20 sliders blending FBX-derived morph targets from `tools/bone_backup/all_parts_bs.fbx` into the posed mesh. Each slider defaults to **0.0**, range **0.0…1.0**, fully active at 1.0. Combining sliders is additive.
 
-Discovery is automatic — `process.py` reads names from `presets/face_blendshapes.npz` at startup, so adding a new shape in Blender and re-extracting will surface it in the UI on the next reload. The `bs_` prefix is purely a UI label; on-disk preset JSONs and the FBX itself use the bare name.
+The shape list is auto-discovered from `presets/face_blendshapes.npz` — add a new shape key in Blender, regenerate the npz, and the slider appears in the UI on next reload (no code changes). The `bs_` prefix is a UI-only label; FBX shape-key names and `settings_json` keys use the bare name.
 
 #### Face
 
-| Slider | Effect |
+| Parameter | Effect |
 |---|---|
-| bs_face_big      | Face up |
-| bs_face_small    | Face down |
-| bs_face_wide     | Face wider |
+| bs_face_big   | Face up |
+| bs_face_small | Face down |
 | bs_face_mangabig | Manga-inflated face |
-| bs_face_manga    | Anime-style face shape |
-| bs_chin_sharp    | Sharper chin |
+| bs_face_manga | Anime-style face |
+| bs_chin_sharp | Sharper chin |
 
 #### Neck
 
-| Slider | Effect |
+| Parameter | Effect |
 |---|---|
 | bs_neck_thick | Thicker neck |
 | bs_neck_thin  | Thinner neck |
 
 #### Chest
 
-| Slider | Effect |
+| Parameter | Effect |
 |---|---|
 | bs_breast_full | Larger breasts |
 | bs_breast_flat | Flatter breasts |
@@ -369,21 +310,21 @@ Discovery is automatic — `process.py` reads names from `presets/face_blendshap
 
 #### Shoulder
 
-| Slider | Effect |
+| Parameter | Effect |
 |---|---|
 | bs_shoulder_wide   | Wider shoulders |
 | bs_shoulder_narrow | Narrower shoulders |
-| bs_shoulder_slope  | Slope / square shoulders |
+| bs_shoulder_slope  | Sloped / square shoulders |
 
 #### Waist
 
-| Slider | Effect |
+| Parameter | Effect |
 |---|---|
 | bs_waist_slim | Slimmer waist |
 
 #### Limbs
 
-| Slider | Effect |
+| Parameter | Effect |
 |---|---|
 | bs_limb_thick | Thicker limbs |
 | bs_limb_thin  | Thinner limbs |
@@ -392,46 +333,30 @@ Discovery is automatic — `process.py` reads names from `presets/face_blendshap
 
 #### Muscle
 
-| Slider | Effect |
+| Parameter | Effect |
 |---|---|
 | bs_MuscleScale | Bulk up full-body muscle (macho) |
 
-### Outputs
-
-| Output | Notes |
-|---|---|
-| image | The rendered RGB image |
-| settings_json | JSON snapshot of the current slider values, paste-compatible with `chara_settings_presets/*.json` |
-
-The `settings_json` has the structure:
-
-```json
-{
-  "body_params":  { "fat": 0.0, "muscle": 0.0, ..., "thigh_calf": 0.0 },
-  "bone_lengths": { "torso": 1.0, "neck": 1.0, "arm": 1.0, "leg": 1.0 },
-  "blendshapes":  { "face_big": 0.0, ..., "waist_slim": 0.0 }
-}
-```
 
 ### Preset system
 
-Drop a JSON of the above shape into `chara_settings_presets/<name>.json` and it appears in the `preset` dropdown. Selecting a preset pushes its values into the sliders via a small frontend extension; you can then tweak further. The Python side does **not** re-apply the preset at render time, so post-selection edits are respected. `autosave.json` is special: it's written automatically at the end of every render (except when `preset` is `reset`) and is pinned to the top of the dropdown as the default.
+Drop a JSON of the slider shape into `chara_settings_presets/<name>.json` and it appears in the `preset` dropdown. Selecting a preset overwrites the slider widgets entirely (missing keys treat as neutral). The shipped `female.json` / `male.json` are reference examples.
 
 ## ⚠ Export Rigged FBX node (Blender required)
 
-Writes a rigged FBX (**armature + skinned mesh + 30-frame static pose animation**) of the character + pose to `<ComfyUI>/output/`. Opens directly in Blender / Unity / Unreal Engine.
+Writes a rigged FBX (**armature + skinned mesh + 30-frame static pose animation**) using the same character setup + pose as the Render node, into `<ComfyUI>/output/`. Imports directly into Blender / Unity / Unreal Engine.
 
-> **Blender 4.1+ is required** — this node calls `blender.exe --background --python tools/build_rigged_fbx.py` as a subprocess to assemble the armature, bind the LBS weights, and export the FBX. Environments without Blender will error only on this node (the other three still work).
+> **⚠ Blender 4.1+ is required.** The node spawns `blender.exe --background --python tools/build_rigged_fbx.py` as a subprocess to assemble the armature, bind LBS weights, and export the FBX. Without Blender installed, only this node errors at runtime (the other nodes still work).
 
 ### Inputs
 
 | Parameter | Notes |
 |---|---|
-| model | From the Load node |
-| **character_json** | **Character JSON**. Wire up the Render node's `settings_json` output, or paste any `chara_settings_presets/*.json` contents. Contains `body_params` / `bone_lengths` / `blendshapes`. The text area starts with `=== CHARACTER JSON ===` so you can tell which slot is which. |
-| **pose_json** | **Pose JSON**. Wire the `pose_json` output of the Process Image to Pose JSON node. Contains `body_pose_params` / `hand_pose_params` / `global_rot`. The text area starts with `=== POSE JSON ===`. |
-| blender_exe | Path to `blender.exe` (default `C:/Program Files/Blender Foundation/Blender 4.1/blender.exe`) |
-| output_filename | Output FBX name under `<ComfyUI>/output/` (default `sam3d_rigged.fbx`). Leave blank for a timestamped name |
+| model | Output of `Load SAM 3D Body Model` |
+| **character_json** | **Character settings JSON.** Wire the Render node's `settings_json` output, or paste any `chara_settings_presets/*.json` content (`body_params` / `bone_lengths` / `blendshapes`). The text area starts with `=== CHARACTER JSON ===` so you can tell which slot is which. |
+| **pose_json** | **Pose JSON.** Wire the `pose_json` output of `SAM 3D Body: Process Image to Pose JSON` (`body_pose_params` / `hand_pose_params` / `global_rot`). The text area starts with `=== POSE JSON ===`. |
+| blender_exe | Path to `blender.exe` (default `C:/Program Files/Blender Foundation/Blender 4.1/blender.exe`). Subprocess invocation requires Blender 4.1+ |
+| output_filename | Output FBX name (default `sam3d_rigged.fbx`). Leave blank for a timestamped name |
 
 ### Outputs
 
@@ -439,187 +364,28 @@ Writes a rigged FBX (**armature + skinned mesh + 30-frame static pose animation*
 |---|---|
 | fbx_path | Absolute path of the written FBX (`<ComfyUI>/output/<name>.fbx`) |
 
-### How it works
-
-1. **Python (ComfyUI main venv)**
-   - Expands `character_json`'s `body_params` / `bone_lengths` / `blendshapes` through the same MHR pipeline the Render node uses, producing the character rest mesh
-   - Computes the posed skeleton (world rotation + translation per joint) from `pose_json`'s `body_pose_params` / `hand_pose_params` / `global_rot`
-   - Prunes weightless leaf joints (MHR has ~127; about 15 are pure leaves with no LBS weight) so the final armature has ~112 bones
-   - Dumps the parent hierarchy, rest/posed poses, and sparse LBS skin weights (`V=18439 × J`) to a temp JSON
-2. **Blender (subprocess)**
-   - Reads the temp JSON and `tools/build_rigged_fbx.py` builds:
-     - Armature at rest pose, with `bone.matrix` set so bone rest orientation matches MHR's bind rotation exactly
-     - Mesh at rest-pose vertex positions
-     - One vertex group per bone, with LBS weights written in
-     - Armature modifier on the mesh
-     - Pose mode: each bone's **local delta rotation** is computed from the math (not `pose_bone.matrix`, which mixes translation into the local transform); `pose_bone.location` and `scale` are pinned to 0 / 1 so world positions come purely from forward kinematics
-     - Keyframes at frame 1 and frame 30 so the clip has non-zero duration (Unity treats zero-length clips as empty)
-     - FBX export (`axis_forward=-Z / axis_up=Y`, `add_leaf_bones=False`, `bake_anim=True`, `bake_anim_force_startend_keying=True`)
-
-Tweak the Render node until the preview looks right, pipe its `settings_json` into Export Rigged FBX, and you get a rigged FBX matching exactly what you saw in the preview.
-
-### Notes
-
-- **Blender install required** (see top of this file)
-- First invocation has a 3–10 s Blender startup overhead
-- An empty `pose_json` (`{"body_pose_params": null, ...}`) just outputs the rest pose — no error
-- The `_slot` / `_hint` placeholder keys in the default text are ignored at runtime
 
 ## ⚠ Export Animated FBX node (video motion capture, Blender required)
 
-Writes a full **Unity / Unreal-ready animated FBX** straight from a video (IMAGE batch). Feed a sequence of frames via `ComfyUI-VideoHelperSuite`'s `VHS_LoadVideo` (or any other source that emits a batched IMAGE tensor), and the node runs SAM 3D Body on every frame, then bakes all of them as keyframes onto **a character rigged once at its rest pose (body_pose = 0)**. The resulting FBX plays directly in Blender, Unity Animator / Timeline, and Unreal.
+Writes a **Unity / Unreal-ready animated FBX from a video (IMAGE batch)** in a single node. Pass a frame sequence loaded via `ComfyUI-VideoHelperSuite`'s `VHS_LoadVideo` etc.; each frame goes through SAM 3D Body, joint rotations are estimated, and **all frames are baked as keyframes onto a character rigged at its base pose (body_pose=0)**. The resulting FBX plays directly in Animator / Animation / Timeline.
 
-If `masks` is left unconnected, the node now falls back to internal BiRefNet Lite masking for each frame. This is convenient, but if the segmentation is noisy or misses the subject, you should still connect an explicit `MASK` node for better tracking stability.
-
-See the [demo video](#3-export-motion-captured-fbx-from-a-video) (`docs/sample1.mp4`) near the top of this README for an example of the exported animation.
-
-> **Blender 4.1+ required.** The node spawns `blender.exe --background --python tools/build_animated_fbx.py` as a subprocess to build the armature, bind the LBS weights, write per-frame keyframes, and export the FBX.
-
-### Importing into Unity
-
-- The FBX is written **Y-up / -Z-forward**, so dropping it into Unity orients it correctly.
-- In the FBX's Inspector, set `Rig → Animation Type = Humanoid` to use it as a Humanoid retarget source, or leave it on `Generic` — the original bone names are preserved either way.
-- A single Action (`SAM3D_Armature|Scene`) covers all frames; play it from the Animator or a Timeline track directly.
-
-### Notes
-
-- **Blender install required** — same `blender.exe` as the other Blender-dependent features
-- Runtime is dominated by the frame count + Blender startup (expect a few seconds per frame plus 5–10 s of Blender overhead)
-- Long clips increase memory + JSON size. Prefer verifying on a few hundred frames first.
-- Frames where the subject isn't reliably detected get filled in with the previous good pose; lots of missed frames produce choppy motion. Stable lighting and framing help.
-- **Root translation and rotation are keyframed** — the node reads the per-frame `pred_cam_t` (subject position in camera space) estimated by SAM 3D Body, anchors it to the first detected frame so the clip starts at the origin, and bakes it onto the root bone's `location` F-Curve. Walking / turning / stepping forward in the source video reaches the FBX directly. This assumes a **static camera** in the source video — if the camera moves, the baked trajectory will be the *camera-relative* motion of the subject, not true world-space movement.
-- If the character floats above the ground (or sinks into it) while standing still, the `auto_ground_lock` default of `root_motion_mode` corrects it. See the next section.
+For example output, see the [demo video](#3-export-motion-captured-fbx--bvh-from-a-video) (`docs/sample1.mp4`) at the top of this README.
 
 ## ⚠ Export Posed BVH node (Blender required)
 
-Writes a single-pose **BVH** to `<ComfyUI>/output/`. Use the same `settings_json` from the Render node and the same `pose_json` from Process Image to Pose JSON. The export is skeleton / motion only (no mesh), and the skeleton is reduced to a humanoid-compatible subset before writing.
+Writes a single pose to `<ComfyUI>/output/` as a **BVH**. Uses the same character settings from the Render node and pose from `Process Image to Pose JSON`. Output is skeleton / motion only (no mesh), and the bones are first reduced to a humanoid-compatible subset before writing.
 
-> **Blender 4.1+ is required** — this node calls `blender.exe --background --python tools/build_rigged_bvh.py` as a subprocess.
+> **⚠ Blender 4.1+ is required.** Calls `blender.exe --background --python tools/build_rigged_bvh.py` as a subprocess internally.
 
-### Inputs
+## Developer guide (for users editing blend shapes in Blender)
 
-| Parameter | Notes |
-|---|---|
-| **model** | Output of `Load SAM 3D Body Model` |
-| **character_json** | `settings_json` output from `SAM 3D Body: Render Human From Pose JSON` |
-| **pose_json** | `pose_json` output from `SAM 3D Body: Process Image to Pose JSON` |
-| blender_exe | Path to `blender.exe` |
-| output_filename | Output BVH name (default `sam3d_posed.bvh`) |
+> **The rest of this section is for advanced users who want to edit `tools/bone_backup/all_parts_bs.fbx` in Blender to add or update their own blend shapes.** If you only render with the 18 shipped blend shapes, you can skip it.
 
-### Outputs
+Steps for adding a new blend shape, the `extract_face_blendshapes.py` / `rebuild_vertex_jsons.py` commands, and the full `tools/` script reference all live in a dedicated document:
 
-| Output | Notes |
-|---|---|
-| bvh_path | Absolute path of the written BVH (`<ComfyUI>/output/<name>.bvh`) |
+- 📖 **[docs/DEVELOPER_GUIDE.en.md](docs/DEVELOPER_GUIDE.en.md)** — Developer guide (English)
+- 📖 **[docs/DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md)** — 開発者ガイド (日本語)
 
-### Example workflow
+## Credits
 
-- `workflows/SAM3Dbody_ BVH.json`
-
-## ⚠ Export Animated BVH node (video motion capture, Blender required)
-
-Writes an animated **BVH** from a video (IMAGE batch). The basic flow matches `Export Animated FBX`: estimate a pose on every frame, then bake the whole sequence into one BVH. The output contains skeleton + motion only, with no mesh.
-
-If `masks` is not connected, the node also falls back to internal BiRefNet Lite masking. That fallback is useful for quick setup, but for difficult footage you should provide an explicit mask input for higher accuracy.
-
-You can also optionally pass `pose_json` as `{"frames": [pose, ...], "fps": 30}` (or a plain list of poses) for manual pose-sequence export.
-
-> **Blender 4.1+ is required** — this node calls `blender.exe --background --python tools/build_animated_bvh.py` as a subprocess.
-
-### Inputs
-
-| Parameter | Default | Notes |
-|---|---|---|
-| **model** | — | Output of `Load SAM 3D Body Model` |
-| **images** | — | Batched IMAGE tensor from `VHS_LoadVideo` or similar |
-| **character_json** | placeholder | `settings_json` output from the Render node |
-| **pose_adjust** | `0.0` | Lean-correction strength (0–1). Same behaviour as on `Export Animated FBX` — bends the spine → neck chain backwards. Leave at `0` for live-action, try ~`0.5` for illustrated / anime input. |
-| fps | `30.0` | Output BVH frame rate |
-| bbox_threshold | `0.8` | Person detection threshold |
-| inference_type | `full` | `full` / `body` / `hand` |
-| blender_exe | `C:/Program Files/Blender Foundation/Blender 4.1/blender.exe` | Path to `blender.exe` |
-| output_filename | `sam3d_animated.bvh` | Output BVH filename |
-| masks (optional) | — | Per-frame person masks, used only when the mask count matches |
-| pose_json (optional) | — | `{"frames": [...], "fps": 30}` or a plain pose array, for manual sequence export |
-
-### Outputs
-
-| Output | Notes |
-|---|---|
-| bvh_path | Absolute path of the written BVH (`<ComfyUI>/output/<name>.bvh`) |
-
-### Example workflow
-
-- `workflows/SAM3Dbody_BVHAnimation.json`
-
-## Developer guide: adding new blend shapes
-
-The `bs_*` sliders are auto-discovered from `presets/face_blendshapes.npz`, so **no Python changes are needed** to add one.
-
-### Steps
-
-1. **Open `tools/bone_backup/all_parts_bs.fbx` in Blender**
-2. Select the `mhr_reference` mesh
-3. In Object Properties → **Shape Keys**, add a new key and sculpt it (Basis first if it's missing)
-4. Export the FBX with the settings documented earlier (Forward=-Z / Up=Y / Scale 1.0)
-5. Run the extractor — this single command also syncs every preset and the UI order:
-
-   ```
-   "C:/Program Files/Blender Foundation/Blender 4.1/blender.exe" ^
-       --background --python tools/extract_face_blendshapes.py
-   ```
-
-   - `presets/face_blendshapes.npz` is rebuilt from the FBX
-   - `chara_settings_presets/*.json` get the new key added (default 0.0) and stale keys removed
-   - `process.py`'s `_UI_BLENDSHAPE_ORDER` gets the new key inserted at the end of its category (face/neck/chest/shoulder/waist/limbs inferred from the name prefix)
-
-6. Refresh ComfyUI — the new slider appears in the UI.
-
-### Editing existing shape values
-
-Re-sculpt the key in Blender, re-export FBX, re-run step 5. Values are **overwritten from source** each time, so there's no manual diff to manage.
-
-### Rebuild everything from scratch
-
-```
-del presets\face_blendshapes.npz
-del presets\*_vertices.json
-```
-
-Then re-run steps 5 and 6. `tools/rebuild_vertex_jsons.py` regenerates the per-object vertex JSON from the npz.
-
-## FBX update workflow (one-liner)
-
-After editing the FBX in Blender:
-
-### 1. Extract blend shapes + auto-sync presets and UI order
-
-```
-"C:/Program Files/Blender Foundation/Blender 4.1/blender.exe" ^
-    --background --python custom_nodes/ComfyUI-SAM3DBody_utills/tools/extract_face_blendshapes.py
-```
-
-### 2. Regenerate the per-object vertex JSON
-
-```
-.venv/Scripts/python.exe custom_nodes/ComfyUI-SAM3DBody_utills/tools/rebuild_vertex_jsons.py
-```
-
-### 3. Refresh ComfyUI
-
-Reload the browser — the new shape keys and updated UI order show up automatically.
-
-## tools/ script reference
-
-| Script | Run in | Role |
-|---|---|---|
-| `tools/extract_face_blendshapes.py` | **Blender** (`--background --python`) | Walks all mesh objects + shape keys in `tools/bone_backup/all_parts_bs.fbx`, writes `presets/face_blendshapes.npz` (`base__<obj>`, `delta__<obj>__<shape>`, `meta_shapes`, `meta_objects`, `all_base__<obj>`). Calls `sync_presets_with_npz.sync_all()` at the end to keep presets + UI aligned. |
-| `tools/rebuild_vertex_jsons.py` | **ComfyUI venv** | Nearest-neighbour-matches the npz's `all_base__<obj>` positions against MHR rest vertices and writes `presets/<obj>_vertices.json` files. Auto-removes stale JSONs when the FBX object list changes. |
-| `tools/sync_presets_with_npz.py` | **ComfyUI venv** or Blender | Standalone sync (normally called automatically at the end of `extract_face_blendshapes.py`). Adds missing keys to preset JSONs with value 0.0, drops stale keys, rewrites `_UI_BLENDSHAPE_ORDER` in `process.py`. |
-| `tools/build_rigged_fbx.py` | **Blender** (spawned by the Export Rigged FBX node) | Builds the rigged FBX from the node's intermediate JSON (armature + mesh + LBS weights + posed animation + FBX export). |
-| `tools/rename_blendshape_keys.py` | **Blender** | One-off helper for renaming shape keys in `all_parts_bs.fbx` (edit the `RENAMES` dict inside and run). |
-| `tools/export_reference_obj.py` | **ComfyUI venv** | Writes `tools/bone_backup/mhr_reference.obj` — a single non-partitioned MHR rest-pose OBJ. Used as a safety backup and as a starting point if the FBX is ever rebuilt from scratch. |
-
-## Acknowledgements
-
-Based on [PozzettiAndrea/ComfyUI-SAM3DBody](https://github.com/PozzettiAndrea/ComfyUI-SAM3DBody). SAM 3D Body is Meta AI's full-body mesh recovery model; Momentum Human Rig is Meta's parametric body model. Both libraries are vendored here under their original licenses.
+[SAM 3D Body](https://github.com/facebookresearch/sam-3d-body) by Meta AI ([paper](https://ai.meta.com/research/publications/sam-3d-body-robust-full-body-human-mesh-recovery/))

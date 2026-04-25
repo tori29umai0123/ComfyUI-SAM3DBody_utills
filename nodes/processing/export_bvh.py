@@ -39,13 +39,13 @@ from .export_animated import (
     _mask_frame_bbox,
 )
 from .export_rigged import (
-    _DEFAULT_BLENDER,
     _KNOWN_JOINT_NAMES,
     _SHAPE_SLIDER_NORM,
     _SHAPE_SLIDER_SIGN,
     _scale_skeleton_rest,
     _unpack_batched,
 )
+from ..preset_pack import get_blender_exe_path, set_blender_exe_path
 
 
 _UTILS_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -356,7 +356,11 @@ class SAM3DBodyExportPosedBVH:
                 "model": ("SAM3D_MODEL",),
                 "character_json": ("STRING", {"multiline": True, "default": character_placeholder}),
                 "pose_json": ("STRING", {"multiline": True, "default": pose_placeholder}),
-                "blender_exe": ("STRING", {"default": _DEFAULT_BLENDER}),
+                "blender_exe": ("STRING", {
+                    "default": get_blender_exe_path(),
+                    "tooltip": "blender.exe のパス。実行時に config.ini "
+                               "[blender] exe_path に保存されます。",
+                }),
                 "output_filename": ("STRING", {"default": "sam3d_posed.bvh"}),
             },
         }
@@ -369,6 +373,11 @@ class SAM3DBodyExportPosedBVH:
 
     def export(self, model, character_json, pose_json, blender_exe, output_filename):
         import folder_paths
+
+        try:
+            set_blender_exe_path(blender_exe)
+        except Exception as exc:
+            print(f"[SAM3DBody] config.ini blender path save failed: {exc}")
 
         preset = _parse_json_or_empty(character_json, "character_json")
         pose_payload = _parse_json_or_empty(pose_json, "pose_json")
@@ -511,7 +520,11 @@ class SAM3DBodyExportAnimatedBVH:
                 "fps": ("FLOAT", {"default": 30.0, "min": 1.0, "max": 240.0, "step": 1.0}),
                 "bbox_threshold": ("FLOAT", {"default": 0.8, "min": 0.0, "max": 1.0, "step": 0.05}),
                 "inference_type": (["full", "body", "hand"], {"default": "full"}),
-                "blender_exe": ("STRING", {"default": _DEFAULT_BLENDER}),
+                "blender_exe": ("STRING", {
+                    "default": get_blender_exe_path(),
+                    "tooltip": "blender.exe のパス。実行時に config.ini "
+                               "[blender] exe_path に保存されます。",
+                }),
                 "output_filename": ("STRING", {"default": "sam3d_animated.bvh"}),
             },
             "optional": {
@@ -542,6 +555,11 @@ class SAM3DBodyExportAnimatedBVH:
     ):
         import folder_paths
         from ..sam_3d_body import SAM3DBodyEstimator
+
+        try:
+            set_blender_exe_path(blender_exe)
+        except Exception as exc:
+            print(f"[SAM3DBody] config.ini blender path save failed: {exc}")
 
         preset = _parse_json_or_empty(character_json, "character_json")
         motion_payload = _parse_json_or_empty(pose_json, "pose_json")

@@ -37,8 +37,8 @@ from .export_rigged import (
     _SHAPE_SLIDER_SIGN,
     _unpack_batched,
     _scale_skeleton_rest,
-    _DEFAULT_BLENDER,
 )
+from ..preset_pack import get_blender_exe_path, set_blender_exe_path
 
 
 _UTILS_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -353,8 +353,11 @@ class SAM3DBodyExportAnimatedFBX:
                                "xz_only: Y 成分を無効化 (水平移動のみ、ジャンプも失われる)。",
                 }),
                 "blender_exe": ("STRING", {
-                    "default": _DEFAULT_BLENDER,
-                    "tooltip": "blender.exe のパス (subprocess 呼び出し)",
+                    "default": get_blender_exe_path(),
+                    "tooltip": "blender.exe のパス (subprocess 呼び出し)。\n"
+                               "ノードを実行すると、ここに入力した値が config.ini "
+                               "[blender] exe_path に保存され、次から新しいノードの"
+                               "デフォルトとして使われます。",
                 }),
                 "output_filename": ("STRING", {
                     "default": "sam3d_animated.fbx",
@@ -382,6 +385,11 @@ class SAM3DBodyExportAnimatedFBX:
                masks=None):
         import folder_paths
         from ..sam_3d_body import SAM3DBodyEstimator
+
+        try:
+            set_blender_exe_path(blender_exe)
+        except Exception as exc:
+            print(f"[SAM3DBody] config.ini blender path save failed: {exc}")
 
         if root_motion_mode not in _ROOT_MOTION_MODES:
             print(f"[SAM3DBody] unknown root_motion_mode '{root_motion_mode}', "

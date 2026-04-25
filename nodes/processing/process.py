@@ -46,7 +46,7 @@ _MODEL_CACHE = {}
 
 def _character_presets_dir():
     """Resolves to `presets/<active pack>/chara_settings_presets/` —
-    controlled by active_preset.ini at the repo root."""
+    controlled by config.ini at the repo root."""
     from ..preset_pack import chara_settings_dir
     return str(chara_settings_dir())
 
@@ -1200,8 +1200,8 @@ class SAM3DBodyProcessToJson:
             },
         }
 
-    RETURN_TYPES = ("STRING", "IMAGE")
-    RETURN_NAMES = ("pose_json", "image")
+    RETURN_TYPES = ("STRING",)
+    RETURN_NAMES = ("pose_json",)
     FUNCTION = "process_to_json"
     CATEGORY = "SAM3DBody/processing"
 
@@ -1260,26 +1260,29 @@ class SAM3DBodyProcessToJson:
 
         mesh_data = {"raw_output": outputs[0]}
         pose_json = _extract_pose_json(mesh_data, image)
-        return (pose_json, numpy_to_comfy_image(img_bgr))
+        return (pose_json,)
 
 
-class SAM3DBodyRenderFromJson:
+class SAM3DBodySettingCharaJson:
+    """Character-shape editor → outputs a chara_json string only.
+
+    Split out from the legacy ``SAM3DBodyRenderFromJson`` so the body /
+    bone / blendshape state can be authored once and reused by multiple
+    renders (and by other consumers — exporter nodes, the Pose Editor's
+    chara_json input, etc.). Pair with
+    ``SAM3DBodyRenderFromPoseAndCharaJson`` to render a frame.
+
+    The output JSON layout matches ``chara_settings_presets/*.json`` so
+    it's drop-in interchangeable with the saved presets and with the
+    standalone Character Editor's confirmed payload.
+    """
+
     @classmethod
     def INPUT_TYPES(cls):
-        # UI layout (top to bottom):
-        #   1. Core inputs & camera
-        #   2. body_*     — PCA body shape (9 axes)
-        #   3. bone_*     — bone length scales (4 chains)
-        #   4. bs_*       — blend shapes, ordered head->neck->chest->shoulder
-        #                   ->waist->limbs
-        #
         # Per-slider default values are taken from
         # chara_settings_presets/autosave.json (written at the end of
-        # every render call) so the last render's settings persist
-        # across ComfyUI restarts. ComfyUI's workflow JSON still takes
-        # precedence over these defaults for nodes that already have an
-        # explicit value saved — autosave only fills in fresh nodes and
-        # first-time loads.
+        # every successful build) so the last setting persists across
+        # ComfyUI restarts.
         autosave = _load_autosave()
         body_auto = autosave.get("body_params", {}) if isinstance(autosave, dict) else {}
         bone_auto = autosave.get("bone_lengths", {}) if isinstance(autosave, dict) else {}
@@ -1298,26 +1301,8 @@ class SAM3DBodyRenderFromJson:
                     "min": 0.0, "max": 1.0, "step": 0.01}
 
         required = {
-            # Core
-            "model":        ("SAM3D_MODEL",),
-            "pose_json":    ("STRING", {"default": "{}"}),
             "preset":       (_discover_character_presets(),
                              {"default": "autosave"}),
-            # Camera (intentionally NOT restored from autosave — these
-            # are per-shot controls, not part of the character identity)
-            "offset_x":     ("FLOAT", {"default": 0.0, "min": -5.0, "max": 5.0, "step": 0.01}),
-            "offset_y":     ("FLOAT", {"default": 0.0, "min": -5.0, "max": 5.0, "step": 0.01}),
-            "scale_offset": ("FLOAT", {"default": 1.0, "min": 0.1, "max": 5.0, "step": 0.01}),
-            # Orbit camera around the subject (always pointing at it).
-            # camera_yaw_deg:   horizontal orbit. + = camera moves to the
-            #                   viewer's right (subject appears to turn left).
-            # camera_pitch_deg: vertical orbit. + = camera moves up (looking
-            #                   down at the subject); - = looking up.
-            "camera_yaw_deg":   ("FLOAT", {"default": 0.0, "min": -180.0, "max": 180.0, "step": 1.0}),
-            "camera_pitch_deg": ("FLOAT", {"default": 0.0, "min": -89.0,  "max": 89.0,  "step": 1.0}),
-            "width":        ("INT",   {"default": 0,   "min": 0,    "max": 8192}),
-            "height":       ("INT",   {"default": 0,   "min": 0,    "max": 8192}),
-            "pose_adjust":  ("FLOAT", {"default": 0.0, "min": 0.0,  "max": 1.0, "step": 0.01}),
             # Body (MHR 45-dim PCA, first 9 axes)
             "body_fat":              ("FLOAT", _body("fat")),
             "body_muscle":           ("FLOAT", _body("muscle")),
@@ -1335,53 +1320,27 @@ class SAM3DBodyRenderFromJson:
             "bone_arm":    ("FLOAT", _bone("arm")),
             "bone_leg":    ("FLOAT", _bone("leg")),
         }
-        # Blend-shape sliders (discovered from npz; `bs_` prefix added here).
         for bs_name in _discover_blendshape_names():
             required[f"bs_{bs_name}"] = ("FLOAT", _bs(bs_name))
-        return {
-            "required": required,
-            "optional": {
-                "background_image": ("IMAGE",),
-            },
-        }
+        return {"required": required}
 
-    RETURN_TYPES = ("IMAGE", "STRING")
-    RETURN_NAMES = ("image", "settings_json")
-    FUNCTION = "render"
+    RETURN_TYPES = ("STRING",)
+    RETURN_NAMES = ("chara_json",)
+    FUNCTION = "build"
     CATEGORY = "SAM3DBody/render"
 
-    def render(self, model, pose_json, preset="none",
-                     offset_x=0.0, offset_y=0.0, scale_offset=1.0,
-                     camera_yaw_deg=0.0, camera_pitch_deg=0.0,
-                     width=1024, height=1024, pose_adjust=0.0,
-                     body_fat=0.0, body_muscle=0.0, body_fat_muscle=0.0,
-                     body_limb_girth=0.0, body_limb_muscle=0.0, body_limb_fat=0.0,
-                     body_chest_shoulder=0.0, body_waist_hip=0.0,
-                     body_thigh_calf=0.0,
-                     bone_torso=1.0, bone_neck=1.0, bone_arm=1.0, bone_leg=1.0,
-                     background_image=None, **bs_kwargs):
-        # Strip the `bs_` prefix on the way in — `_apply_face_blendshapes`
-        # keys by the FBX shape name, not the UI slider name.
+    def build(self, preset="autosave",
+              body_fat=0.0, body_muscle=0.0, body_fat_muscle=0.0,
+              body_limb_girth=0.0, body_limb_muscle=0.0, body_limb_fat=0.0,
+              body_chest_shoulder=0.0, body_waist_hip=0.0,
+              body_thigh_calf=0.0,
+              bone_torso=1.0, bone_neck=1.0, bone_arm=1.0, bone_leg=1.0,
+              **bs_kwargs):
         blendshape_sliders = {}
         for k, v in bs_kwargs.items():
             if k.startswith("bs_"):
                 blendshape_sliders[k[3:]] = float(v)
-
-        # The `preset` widget is purely a frontend convenience — selecting
-        # one writes that preset's values into the slider widgets via JS
-        # (/sam3d/preset/{name}). We deliberately do NOT re-apply the
-        # preset here, so any manual tweaks the user makes after picking
-        # a preset survive to the render. The only thing we still check
-        # on the Python side is the preset NAME: rendering with the
-        # `reset` preset selected must NOT overwrite autosave.json (the
-        # user is explicitly discarding state, not capturing it).
         active_preset = str(preset)
-
-        # settings_json is intentionally a drop-in character preset. It can
-        # be copied into chara_settings_presets/<name>.json as-is to lock
-        # the current body shape. Camera offsets and the active preset
-        # name are omitted on purpose — those are per-render controls,
-        # not part of a saved character identity.
         settings = {
             "body_params": {
                 "fat":            float(body_fat),
@@ -1400,7 +1359,113 @@ class SAM3DBodyRenderFromJson:
                 "arm":   float(bone_arm),
                 "leg":   float(bone_leg),
             },
-            "blendshapes": {k: float(v) for k, v in sorted(blendshape_sliders.items())},
+            "blendshapes": {
+                k: float(v) for k, v in sorted(blendshape_sliders.items())
+            },
+        }
+        # Persist for the next ComfyUI start unless the user explicitly
+        # picked the "reset" preset (a discard-state action).
+        if active_preset != "reset":
+            _save_autosave(settings)
+        return (json.dumps(settings, ensure_ascii=False, indent=2),)
+
+
+class SAM3DBodyRenderFromPoseAndCharaJson:
+    """Render a posed character to an image. Pose data comes from
+    ``pose_json`` (Process Image to Pose JSON / Pose Editor), body shape
+    comes from ``chara_json`` (Setting Chara JSON / Character Editor).
+
+    The remaining widgets are per-shot controls only — camera offsets,
+    orbit, framing, and the lean-correction strength — none of which
+    belong inside chara_json.
+    """
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "model":        ("SAM3D_MODEL",),
+                "pose_json":    ("STRING", {"default": "{}"}),
+                "chara_json":   ("STRING", {"default": "{}"}),
+                # Camera (per-shot controls)
+                "offset_x":     ("FLOAT", {"default": 0.0, "min": -5.0, "max": 5.0, "step": 0.01}),
+                "offset_y":     ("FLOAT", {"default": 0.0, "min": -5.0, "max": 5.0, "step": 0.01}),
+                "scale_offset": ("FLOAT", {"default": 1.0, "min": 0.1, "max": 5.0, "step": 0.01}),
+                # Orbit camera around the subject (always pointing at it).
+                "camera_yaw_deg":   ("FLOAT", {"default": 0.0, "min": -180.0, "max": 180.0, "step": 1.0}),
+                "camera_pitch_deg": ("FLOAT", {"default": 0.0, "min": -89.0,  "max": 89.0,  "step": 1.0}),
+                "width":        ("INT",   {"default": 0,   "min": 0,    "max": 8192}),
+                "height":       ("INT",   {"default": 0,   "min": 0,    "max": 8192}),
+                "pose_adjust":  ("FLOAT", {"default": 0.0, "min": 0.0,  "max": 1.0, "step": 0.01}),
+            },
+            "optional": {
+                "background_image": ("IMAGE",),
+            },
+        }
+
+    RETURN_TYPES = ("IMAGE",)
+    RETURN_NAMES = ("image",)
+    FUNCTION = "render"
+    CATEGORY = "SAM3DBody/render"
+
+    def render(self, model, pose_json, chara_json,
+               offset_x=0.0, offset_y=0.0, scale_offset=1.0,
+               camera_yaw_deg=0.0, camera_pitch_deg=0.0,
+               width=1024, height=1024, pose_adjust=0.0,
+               background_image=None):
+        # Parse chara_json. Missing / malformed → MHR neutral body
+        # (all defaults), so an empty input still produces a sensible
+        # render rather than crashing.
+        try:
+            chara = json.loads(chara_json) if chara_json and chara_json.strip() else {}
+        except Exception as exc:
+            print(f"[SAM3DBody] chara_json parse failed: {exc}; using empty preset")
+            chara = {}
+        body_params  = chara.get("body_params")  or {}
+        bone_lengths = chara.get("bone_lengths") or {}
+        blendshape_sliders = {
+            str(k): float(v) for k, v in (chara.get("blendshapes") or {}).items()
+        }
+
+        body_fat              = float(body_params.get("fat", 0.0))
+        body_muscle           = float(body_params.get("muscle", 0.0))
+        body_fat_muscle       = float(body_params.get("fat_muscle", 0.0))
+        body_limb_girth       = float(body_params.get("limb_girth", 0.0))
+        body_limb_muscle      = float(body_params.get("limb_muscle", 0.0))
+        body_limb_fat         = float(body_params.get("limb_fat", 0.0))
+        body_chest_shoulder   = float(body_params.get("chest_shoulder", 0.0))
+        body_waist_hip        = float(body_params.get("waist_hip", 0.0))
+        body_thigh_calf       = float(body_params.get("thigh_calf", 0.0))
+
+        bone_torso = float(bone_lengths.get("torso", 1.0))
+        bone_neck  = float(bone_lengths.get("neck",  1.0))
+        bone_arm   = float(bone_lengths.get("arm",   1.0))
+        bone_leg   = float(bone_lengths.get("leg",   1.0))
+
+        # settings_json is the chara_json equivalent for the current
+        # render — handy as a debug echo / for downstream nodes that
+        # want the canonicalised character description.
+        settings = {
+            "body_params": {
+                "fat":            body_fat,
+                "muscle":         body_muscle,
+                "fat_muscle":     body_fat_muscle,
+                "limb_girth":     body_limb_girth,
+                "limb_muscle":    body_limb_muscle,
+                "limb_fat":       body_limb_fat,
+                "chest_shoulder": body_chest_shoulder,
+                "waist_hip":      body_waist_hip,
+                "thigh_calf":     body_thigh_calf,
+            },
+            "bone_lengths": {
+                "torso": bone_torso,
+                "neck":  bone_neck,
+                "arm":   bone_arm,
+                "leg":   bone_leg,
+            },
+            "blendshapes": {
+                k: float(v) for k, v in sorted(blendshape_sliders.items())
+            },
         }
         try:
             lean_strength = float(pose_adjust)
@@ -1726,29 +1791,27 @@ class SAM3DBodyRenderFromJson:
             focal_length=focal_length,
             image=bg_bgr,
         )
-        # Persist the current settings as defaults for the next ComfyUI
-        # start / refresh (best effort — failures don't block rendering).
-        # Rendering with `preset=reset` is a "discard state" action, so
-        # autosave is intentionally skipped — otherwise selecting reset
-        # would clobber the previous character's saved values.
-        if active_preset != "reset":
-            _save_autosave(settings)
-        settings_json_payload = dict(settings)
-        if corrected_pose_json:
-            settings_json_payload["corrected_pose_json"] = corrected_pose_json
-        return (
-            numpy_to_comfy_image(rendered_bgr),
-            json.dumps(settings_json_payload, ensure_ascii=False, indent=2),
-        )
+        # Autosave is owned by SAM3DBodySettingCharaJson now — render
+        # operates purely on the supplied chara_json, so there's no
+        # ambient slider state to persist here. ``settings`` and
+        # ``corrected_pose_json`` are computed above for side effects
+        # (mesh / camera composition); they're not returned because
+        # the previous ``settings_json`` output proved redundant in
+        # practice — downstream nodes already see chara_json directly.
+        del settings, corrected_pose_json
+        return (numpy_to_comfy_image(rendered_bgr),)
 
 
 # Register nodes
 NODE_CLASS_MAPPINGS = {
     "SAM3DBodyProcessToJson": SAM3DBodyProcessToJson,
-    "SAM3DBodyRenderFromJson": SAM3DBodyRenderFromJson,
+    "SAM3DBodySettingCharaJson": SAM3DBodySettingCharaJson,
+    "SAM3DBodyRenderFromPoseAndCharaJson": SAM3DBodyRenderFromPoseAndCharaJson,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
     "SAM3DBodyProcessToJson": "SAM 3D Body: Process Image to Pose JSON",
-    "SAM3DBodyRenderFromJson": "SAM 3D Body: Render Human From Pose JSON",
+    "SAM3DBodySettingCharaJson": "SAM 3D Body: Setting Chara JSON",
+    "SAM3DBodyRenderFromPoseAndCharaJson":
+        "SAM 3D Body: Render Human From Pose And Chara JSON",
 }

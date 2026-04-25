@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>SAM 3D Body — Character Editor</title>
+<link rel="stylesheet" href="/extensions/ComfyUI-SAM3DBody_utills/editor/static/style.css" />
+<style>
+  header .hdr-right { gap: 12px; align-items: center; }
+  #confirm-and-close-btn {
+    background: #2d7d46;
+    color: white;
+    border: none;
+    padding: 8px 14px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 600;
+  }
+  #confirm-and-close-btn:hover { background: #36994f; }
+  #confirm-hint { color: #aaa; font-size: 12px; margin-left: 6px; }
+</style>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.170.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.170.0/examples/jsm/"
+  }
+}
+</script>
+<script>
+  window.SAM3D_EDITOR_MODE = "character";
+</script>
+</head>
+<body>
+<header>
+  <div class="hdr-left">
+    <h1>SAM 3D Body — Character Editor</h1>
+  </div>
+  <div class="hdr-right">
+    <div id="status" class="status" data-i18n="status.init">initializing…</div>
+    <button id="confirm-and-close-btn" title="Ctrl+Enter">
+      Confirm &amp; Close / 確定して閉じる
+    </button>
+    <span id="confirm-hint">Ctrl+Enter</span>
+    <label class="lang-picker">
+      <span class="muted" data-i18n="lang.label">Language</span>
+      <select id="lang-select">
+        <option value="ja">日本語</option>
+        <option value="en">English</option>
+      </select>
+    </label>
+  </div>
+</header>
+<main>
+  <aside id="sidebar">
+    <!-- ===== Make tab ===== -->
+    <div data-tab-panel="make">
+      <section id="make-section">
+        <h2 data-i18n="section.make">キャラメイク</h2>
+        <p class="muted" data-i18n="make.hint">MHR 既定の T-pose 素体に対して、下の Character スライダーで体形を調整できます。</p>
+      </section>
+    </div>
+
+    <!-- ===== Shared Character panel (preset, JSON, sliders) ===== -->
+    <section id="character-section" data-tab-show="make" hidden>
+      <h2 data-i18n="section.character">Character</h2>
+      <div class="row" data-pose-lock>
+        <select id="preset-select">
+          <option value="" data-i18n="character.preset_placeholder">(preset)</option>
+        </select>
+        <button id="load-preset-btn" data-i18n="character.load" data-i18n-title="tooltip.pack_switch">Load</button>
+      </div>
+      <label class="file-drop compact" id="char-json-drop" data-pose-lock>
+        <input type="file" id="char-json-input" accept=".json,application/json" />
+        <span id="char-json-label" data-i18n="character.json_drop">キャラクター JSON をアップロード (任意)</span>
+      </label>
+      <div id="char-source-info" class="muted"></div>
+      <div class="row"><span id="render-info" class="muted"></span></div>
+
+      <div data-tab-show="make">
+        <div class="row">
+          <button id="reset-btn" data-i18n="character.reset" data-i18n-title="tooltip.reset">Reset</button>
+        </div>
+        <details open>
+          <summary data-i18n="character.body_summary">Body (PCA 9 axes)</summary>
+          <div id="body-params-sliders"></div>
+        </details>
+        <details>
+          <summary data-i18n="character.bone_summary">Bone length (4 chains)</summary>
+          <div id="bone-lengths-sliders"></div>
+        </details>
+        <details>
+          <summary data-i18n="character.bs_summary">Blendshapes</summary>
+          <div id="blendshapes-sliders"></div>
+        </details>
+      </div>
+    </section>
+  </aside>
+
+  <section id="viewport" data-tab-show="make">
+    <canvas id="three-canvas"></canvas>
+    <div id="viewport-overlay" class="muted">Adjust sliders to shape the neutral T-pose body.</div>
+  </section>
+</main>
+
+<!-- DOM stubs editor_core.js queries but this page does not surface. -->
+<div hidden>
+  <div data-tab-panel="image"></div>
+  <div data-tab-panel="video"></div>
+  <div data-tab-panel="admin"></div>
+  <input type="file" id="file-input" />
+  <span id="file-label"></span>
+  <img id="preview" />
+  <button id="run-btn"></button>
+  <div id="run-info"></div>
+  <input id="img-lean-range" />
+  <input id="img-lean-num" />
+  <button id="pose-edit-toggle-btn"></button>
+  <div id="pose-edit-panel"></div>
+  <select id="pose-bone-select"></select>
+  <input id="pose-rot-x-range" /><input id="pose-rot-x-num" />
+  <input id="pose-rot-y-range" /><input id="pose-rot-y-num" />
+  <input id="pose-rot-z-range" /><input id="pose-rot-z-num" />
+  <button id="pose-undo-btn"></button>
+  <button id="pose-redo-btn"></button>
+  <button id="pose-reset-bone-btn"></button>
+  <button id="pose-reset-all-btn"></button>
+  <button id="export-fbx-btn"></button>
+  <button id="export-bvh-btn"></button>
+  <div id="fbx-info"></div>
+  <div id="bvh-info"></div>
+  <button id="make-download-btn"></button>
+  <div id="make-download-info"></div>
+  <input type="file" id="video-input" />
+  <input id="video-bbox-thr" /><input id="video-fps" /><input id="video-stride" />
+  <input id="video-max-frames" /><input id="video-lean-range" /><input id="video-lean-num" />
+  <select id="video-root-mode"></select>
+  <button id="video-run-btn"></button>
+  <div id="video-run-info"></div>
+  <button id="video-download-btn"></button>
+  <button id="video-download-bvh-btn"></button>
+  <div id="video-download-info"></div>
+  <div id="video-download-bvh-info"></div>
+  <select id="pack-select"></select>
+  <button id="pack-switch-btn"></button>
+  <input id="pack-new-name" />
+  <button id="pack-clone-btn"></button>
+  <button id="pack-delete-btn"></button>
+  <span id="pack-active-label"></span>
+  <div id="fbx-status"></div>
+  <input type="file" id="fbx-input" />
+  <button id="fbx-rebuild-btn"></button>
+  <span id="fbx-rebuild-info"></span>
+  <label id="fbx-drop"></label>
+  <span id="fbx-label"></span>
+  <label id="file-drop"></label>
+  <label id="video-drop"></label>
+  <span id="video-label"></span>
+  <div id="video-info"></div>
+  <section id="health-section"></section>
+  <button id="save-render-btn"></button>
+  <pre id="health"></pre>
+</div>
+
+<script src="/extensions/ComfyUI-SAM3DBody_utills/editor/static/editor_init.js?v=5"></script>
+<script type="module" src="/extensions/ComfyUI-SAM3DBody_utills/editor/static/i18n.js?v=5"></script>
+<script type="module" src="/extensions/ComfyUI-SAM3DBody_utills/editor/static/editor_core.js?v=5"></script>
+</body>
+</html>

@@ -18,7 +18,7 @@ routes = PromptServer.instance.routes
 
 
 def _chara_dir() -> str:
-    """Resolved lazily so edits to active_preset.ini take effect on the
+    """Resolved lazily so edits to config.ini take effect on the
     next HTTP request, no server restart needed."""
     return str(chara_settings_dir())
 

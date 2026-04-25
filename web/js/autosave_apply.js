@@ -1,23 +1,25 @@
 /**
  * SAM3DBody: preset → slider sync for the
- * `SAM 3D Body: Render Human From Pose JSON` node.
+ * `SAM 3D Body: Setting Chara JSON` node.
  *
  * The `preset` dropdown drives the slider widgets. When the user picks
  * a preset — including the default `autosave` entry — the frontend
  * fetches `chara_settings_presets/<name>.json` and copies its
  * body/bone/blendshape values into the corresponding widgets. The user
  * can then tweak the sliders further; the Python side does not re-apply
- * the preset at render time, so manual adjustments are respected.
+ * the preset at build time, so manual adjustments are respected.
  *
- * Camera inputs (offset_x/y, scale_offset, width, height) are NOT
- * touched — those are per-shot controls, not part of the saved
- * character identity.
+ * (Previous revision targeted the legacy
+ * ``SAM3DBodyRenderFromJson`` node, which has been split into
+ * SettingCharaJson + RenderFromPoseAndCharaJson. The preset → slider
+ * sync logic moved to SettingCharaJson because that's where the
+ * widgets now live; render is purely chara_json-driven.)
  */
 
 import { app } from "../../../../scripts/app.js";
 import { api } from "../../../../scripts/api.js";
 
-const TARGET_NODE = "SAM3DBodyRenderFromJson";
+const TARGET_NODE = "SAM3DBodySettingCharaJson";
 
 async function fetchPreset(name) {
     if (!name) return null;

@@ -1,8 +1,8 @@
 {
   "id": "d78b5b43-3e62-408f-bbc7-66e993ab6505",
   "revision": 0,
-  "last_node_id": 673,
-  "last_link_id": 1984,
+  "last_node_id": 676,
+  "last_link_id": 2002,
   "nodes": [
     {
       "id": 652,
@@ -18,7 +18,7 @@
       "flags": {
         "collapsed": false
       },
-      "order": 8,
+      "order": 9,
       "mode": 0,
       "inputs": [
         {
@@ -54,116 +54,6 @@
         "Node name for S&R": "GetImageSize"
       },
       "widgets_values": []
-    },
-    {
-      "id": 653,
-      "type": "EmptyImage",
-      "pos": [
-        1340,
-        130
-      ],
-      "size": [
-        270,
-        130
-      ],
-      "flags": {},
-      "order": 11,
-      "mode": 0,
-      "inputs": [
-        {
-          "name": "width",
-          "type": "INT",
-          "widget": {
-            "name": "width"
-          },
-          "link": 1943
-        },
-        {
-          "name": "height",
-          "type": "INT",
-          "widget": {
-            "name": "height"
-          },
-          "link": 1944
-        }
-      ],
-      "outputs": [
-        {
-          "name": "IMAGE",
-          "type": "IMAGE",
-          "links": [
-            1980
-          ]
-        }
-      ],
-      "properties": {
-        "cnr_id": "comfy-core",
-        "ver": "0.18.1",
-        "Node name for S&R": "EmptyImage"
-      },
-      "widgets_values": [
-        512,
-        512,
-        1,
-        16777215
-      ]
-    },
-    {
-      "id": 656,
-      "type": "SAM3DBodyProcessToJson",
-      "pos": [
-        1340,
-        390
-      ],
-      "size": [
-        393.421484375,
-        122
-      ],
-      "flags": {},
-      "order": 9,
-      "mode": 0,
-      "inputs": [
-        {
-          "name": "model",
-          "type": "SAM3D_MODEL",
-          "link": 1945
-        },
-        {
-          "name": "image",
-          "type": "IMAGE",
-          "link": 1946
-        },
-        {
-          "name": "mask",
-          "shape": 7,
-          "type": "MASK",
-          "link": null
-        }
-      ],
-      "outputs": [
-        {
-          "name": "pose_json",
-          "type": "STRING",
-          "links": [
-            1981
-          ]
-        },
-        {
-          "name": "image",
-          "type": "IMAGE",
-          "links": null
-        }
-      ],
-      "properties": {
-        "aux_id": "tori29umai0123/ComfyUI-SAM3DBody_utills",
-        "ver": "0.2.1",
-        "Node name for S&R": "SAM3DBodyProcessToJson",
-        "cnr_id": "comfyui-sam3dbody_utills"
-      },
-      "widgets_values": [
-        0.8,
-        "full"
-      ]
     },
     {
       "id": 629,
@@ -330,7 +220,7 @@
         82
       ],
       "flags": {},
-      "order": 7,
+      "order": 8,
       "mode": 0,
       "inputs": [
         {
@@ -370,13 +260,13 @@
         246
       ],
       "flags": {},
-      "order": 14,
+      "order": 15,
       "mode": 0,
       "inputs": [
         {
           "name": "images",
           "type": "IMAGE",
-          "link": 1984
+          "link": 1997
         }
       ],
       "outputs": [],
@@ -399,7 +289,7 @@
         474
       ],
       "flags": {},
-      "order": 16,
+      "order": 17,
       "mode": 0,
       "inputs": [
         {
@@ -451,7 +341,7 @@
         }
       },
       "widgets_values": [
-        461109113332153,
+        1116727681245618,
         "randomize",
         4,
         1,
@@ -474,7 +364,7 @@
       "flags": {
         "collapsed": false
       },
-      "order": 17,
+      "order": 18,
       "mode": 0,
       "inputs": [
         {
@@ -529,7 +419,7 @@
         1540
       ],
       "flags": {},
-      "order": 18,
+      "order": 19,
       "mode": 0,
       "inputs": [
         {
@@ -560,7 +450,7 @@
         82
       ],
       "flags": {},
-      "order": 10,
+      "order": 11,
       "mode": 0,
       "inputs": [
         {
@@ -589,47 +479,6 @@
       ]
     },
     {
-      "id": 654,
-      "type": "LoadImage",
-      "pos": [
-        -115.00599637967503,
-        133.47828441202753
-      ],
-      "size": [
-        906.4193283598238,
-        1457.0970357377535
-      ],
-      "flags": {},
-      "order": 3,
-      "mode": 0,
-      "inputs": [],
-      "outputs": [
-        {
-          "name": "IMAGE",
-          "type": "IMAGE",
-          "links": [
-            1942,
-            1946
-          ]
-        },
-        {
-          "name": "MASK",
-          "type": "MASK",
-          "links": null
-        }
-      ],
-      "title": "Poseimage",
-      "properties": {
-        "cnr_id": "comfy-core",
-        "ver": "0.3.70",
-        "Node name for S&R": "LoadImage"
-      },
-      "widgets_values": [
-        "15_3 (1).png",
-        "image"
-      ]
-    },
-    {
       "id": 662,
       "type": "DWPreprocessor",
       "pos": [
@@ -641,13 +490,13 @@
         222
       ],
       "flags": {},
-      "order": 13,
+      "order": 14,
       "mode": 0,
       "inputs": [
         {
           "name": "image",
           "type": "IMAGE",
-          "link": 1982
+          "link": 1996
         }
       ],
       "outputs": [
@@ -680,18 +529,255 @@
       ]
     },
     {
-      "id": 667,
-      "type": "VNCCS_QWEN_Encoder",
+      "id": 672,
+      "type": "MarkdownNote",
       "pos": [
-        2795.16328125,
+        -1788.114403859188,
+        77.07127892993472
+      ],
+      "size": [
+        550,
+        550
+      ],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "title": "Model links",
+      "properties": {
+        "widget_ue_connectable": {}
+      },
+      "widgets_values": [
+        "[Tutorial](https://docs.comfy.org/tutorials/image/qwen/qwen-image-edit) | [教程](https://docs.comfy.org/zh-CN/tutorials/image/qwen/qwen-image-edit)\n\n## Required custom nodes\n\nThis workflow also requires the following custom nodes:\n\n- [AHEKOT/ComfyUI_VNCCS](https://github.com/AHEKOT/ComfyUI_VNCCS)\n- [tori29umai0123/ComfyUI-SAM3DBody_utills](https://github.com/tori29umai0123/ComfyUI-SAM3DBody_utills)\n\n\n## Model links\n\nYou can find all the models on [Comfy-Org/Qwen-Image_ComfyUI](https://huggingface.co/Comfy-Org/Qwen-Image_ComfyUI/tree/main) and [Comfy-Org/Qwen-Image-Edit_ComfyUI](https://huggingface.co/Comfy-Org/Qwen-Image-Edit_ComfyUI)\n\n**Diffusion model**\n\n- [qwen_image_edit_2511_bf16.safetensors](https://huggingface.co/Comfy-Org/Qwen-Image-Edit_ComfyUI/resolve/main/split_files/diffusion_models/qwen_image_edit_2511_bf16.safetensors)\n\n**LoRA**\n\n- [Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors](https://huggingface.co/lightx2v/Qwen-Image-Edit-2511-Lightning/resolve/main/Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors)\n\n- [VNCCS_PoseStudioQIE2511_V2.safetensors](https://huggingface.co/MIUProject/VNCCS_PoseStudio/resolve/main/models/loras/qwen/VNCCS/VNCCS_PoseStudioQIE2511_V2.safetensors)\n\n**VAE**\n\n- [qwen_image_vae.safetensors](https://huggingface.co/Comfy-Org/Qwen-Image_ComfyUI/resolve/main/split_files/vae/qwen_image_vae.safetensors)\n\n**CLIP**\n\n- [qwen_2.5_vl_7b.safetensors](https://huggingface.co/Comfy-Org/Qwen-Image_ComfyUI/resolve/main/split_files/text_encoders/qwen_2.5_vl_7b.safetensors)\n\nModel Storage Location\n\n```text\n📂 ComfyUI/\n├── 📂 custom_nodes/\n│   ├── 📂 ComfyUI_VNCCS\n│   └── 📂 ComfyUI-SAM3DBody_utills\n├── 📂 models/\n│   ├── 📂 diffusion_models/\n│   │   └── qwen_image_edit_2509_fp8_e4m3fn.safetensors\n│   ├── 📂 loras/QIE\n│   │   ├── Qwen-Image-Lightning-4steps-V1.0.safetensors\n│   │   └── VNCCS_PoseStudioQIE2511_V2.safetensors\n│   ├── 📂 vae/\n│   │   └── qwen_image_vae.safetensors\n│   └── 📂 text_encoders/\n│       └── qwen_2.5_vl_7b_fp8_scaled.safetensors"
+      ],
+      "color": "#432",
+      "bgcolor": "#653"
+    },
+    {
+      "id": 655,
+      "type": "LoadSAM3DBodyModel",
+      "pos": [
+        928.9180722734916,
+        1057.1295741296117
+      ],
+      "size": [
+        273.7994140625,
+        58
+      ],
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "model",
+          "type": "SAM3D_MODEL",
+          "links": [
+            1945,
+            1992
+          ]
+        }
+      ],
+      "properties": {
+        "aux_id": "tori29umai0123/ComfyUI-SAM3DBody_utills",
+        "ver": "0.2.1",
+        "Node name for S&R": "LoadSAM3DBodyModel",
+        "cnr_id": "comfyui-sam3dbody_utills"
+      },
+      "widgets_values": [
+        "Auto"
+      ]
+    },
+    {
+      "id": 656,
+      "type": "SAM3DBodyProcessToJson",
+      "pos": [
+        1170.4061033496548,
+        346.15940086589666
+      ],
+      "size": [
+        393.421484375,
+        122
+      ],
+      "flags": {},
+      "order": 10,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "model",
+          "type": "SAM3D_MODEL",
+          "link": 1945
+        },
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "link": 1946
+        },
+        {
+          "name": "mask",
+          "shape": 7,
+          "type": "MASK",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "pose_json",
+          "type": "STRING",
+          "links": [
+            1994
+          ]
+        },
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "links": null
+        }
+      ],
+      "properties": {
+        "aux_id": "tori29umai0123/ComfyUI-SAM3DBody_utills",
+        "ver": "0.2.1",
+        "Node name for S&R": "SAM3DBodyProcessToJson",
+        "cnr_id": "comfyui-sam3dbody_utills"
+      },
+      "widgets_values": [
+        0.8,
+        "full"
+      ]
+    },
+    {
+      "id": 653,
+      "type": "EmptyImage",
+      "pos": [
+        1340,
         130
       ],
       "size": [
-        422.0176635693647,
-        617.1526293709077
+        270,
+        130
       ],
       "flags": {},
-      "order": 15,
+      "order": 12,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "width",
+          "type": "INT",
+          "widget": {
+            "name": "width"
+          },
+          "link": 1943
+        },
+        {
+          "name": "height",
+          "type": "INT",
+          "widget": {
+            "name": "height"
+          },
+          "link": 1944
+        }
+      ],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            1993
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.18.1",
+        "Node name for S&R": "EmptyImage"
+      },
+      "widgets_values": [
+        512,
+        512,
+        1,
+        16777215
+      ]
+    },
+    {
+      "id": 674,
+      "type": "SAM3DBodySettingCharaJson",
+      "pos": [
+        1311.3318630059453,
+        579.584146574539
+      ],
+      "size": [
+        332.0005859375,
+        850
+      ],
+      "flags": {},
+      "order": 5,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "chara_json",
+          "type": "STRING",
+          "links": [
+            1995
+          ]
+        }
+      ],
+      "properties": {
+        "aux_id": "tori29umai0123/ComfyUI-SAM3DBody_utills",
+        "ver": "0de650cee18b821369cd98fe43dfcd8e3e5f8a10",
+        "Node name for S&R": "SAM3DBodySettingCharaJson"
+      },
+      "widgets_values": [
+        "female",
+        -0.5,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0.9,
+        0.9,
+        1,
+        1,
+        0.03,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0.5,
+        0.3,
+        0.3,
+        0,
+        0.4,
+        0,
+        0.9,
+        0.5,
+        0.5,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "id": 667,
+      "type": "VNCCS_QWEN_Encoder",
+      "pos": [
+        2841.3112803385297,
+        141.53699977213242
+      ],
+      "size": [
+        422.0176635693647,
+        617.1526293709078
+      ],
+      "flags": {},
+      "order": 16,
       "mode": 0,
       "inputs": [
         {
@@ -708,13 +794,13 @@
           "name": "image1",
           "shape": 7,
           "type": "IMAGE",
-          "link": 1983
+          "link": 2002
         },
         {
           "name": "image2",
           "shape": 7,
           "type": "IMAGE",
-          "link": 1970
+          "link": 2001
         },
         {
           "name": "image3",
@@ -774,65 +860,71 @@
       ]
     },
     {
-      "id": 655,
-      "type": "LoadSAM3DBodyModel",
+      "id": 654,
+      "type": "LoadImage",
       "pos": [
-        928.9180722734916,
-        1057.1295741296117
+        -194.97795907792903,
+        209.1898420243067
       ],
       "size": [
-        273.7994140625,
-        58
+        906.4193283598238,
+        1457.0970357377535
       ],
       "flags": {},
-      "order": 4,
+      "order": 6,
       "mode": 0,
       "inputs": [],
       "outputs": [
         {
-          "name": "model",
-          "type": "SAM3D_MODEL",
+          "name": "IMAGE",
+          "type": "IMAGE",
           "links": [
-            1945,
-            1979
+            1942,
+            1946
           ]
+        },
+        {
+          "name": "MASK",
+          "type": "MASK",
+          "links": null
         }
       ],
+      "title": "Poseimage",
       "properties": {
-        "aux_id": "tori29umai0123/ComfyUI-SAM3DBody_utills",
-        "ver": "0.2.1",
-        "Node name for S&R": "LoadSAM3DBodyModel",
-        "cnr_id": "comfyui-sam3dbody_utills"
+        "cnr_id": "comfy-core",
+        "ver": "0.3.70",
+        "Node name for S&R": "LoadImage"
       },
       "widgets_values": [
-        "Auto"
+        "15_3 (1).png",
+        "image"
       ]
     },
     {
-      "id": 673,
-      "type": "SAM3DBodyRenderFromJson",
+      "id": 676,
+      "type": "SAM3DBodyRenderFromPoseAndCharaJson",
       "pos": [
-        1796.6607728366737,
-        105.5883119710878
+        1757.5184203018334,
+        269.35871425976353
       ],
       "size": [
-        414.5103515625,
-        1086
+        488.386328125,
+        294
       ],
       "flags": {},
-      "order": 12,
+      "order": 13,
       "mode": 0,
       "inputs": [
         {
           "name": "model",
           "type": "SAM3D_MODEL",
-          "link": 1979
+          "link": 1992
         },
         {
           "name": "background_image",
           "shape": 7,
           "type": "IMAGE",
-          "link": 1980
+          "link": 1993
         },
         {
           "name": "pose_json",
@@ -840,7 +932,15 @@
           "widget": {
             "name": "pose_json"
           },
-          "link": 1981
+          "link": 1994
+        },
+        {
+          "name": "chara_json",
+          "type": "STRING",
+          "widget": {
+            "name": "chara_json"
+          },
+          "link": 1995
         }
       ],
       "outputs": [
@@ -848,61 +948,23 @@
           "name": "image",
           "type": "IMAGE",
           "links": [
-            1982,
-            1983,
-            1984
+            1996,
+            1997,
+            2002
           ]
-        },
-        {
-          "name": "settings_json",
-          "type": "STRING",
-          "links": null
         }
       ],
       "properties": {
         "aux_id": "tori29umai0123/ComfyUI-SAM3DBody_utills",
-        "ver": "b4e42d971cf9c0b2429b5d5ca166a2f1ad530552",
-        "Node name for S&R": "SAM3DBodyRenderFromJson"
+        "ver": "0de650cee18b821369cd98fe43dfcd8e3e5f8a10",
+        "Node name for S&R": "SAM3DBodyRenderFromPoseAndCharaJson"
       },
       "widgets_values": [
         "{}",
-        "female",
+        "{}",
         0,
         0,
         1,
-        0,
-        0,
-        0,
-        0,
-        0,
-        -0.5,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0.9,
-        0.9,
-        1,
-        1,
-        0.03,
-        0,
-        0,
-        1,
-        0,
-        0,
-        0.5,
-        0.3,
-        0.3,
-        0,
-        0.4,
-        0,
-        0.9,
-        0.5,
-        0.5,
         0,
         0,
         0,
@@ -914,15 +976,15 @@
       "id": 54,
       "type": "LoadImage",
       "pos": [
-        -1186.4719265055624,
-        86.18826256482609
+        -1180.487125271334,
+        140.05147367288487
       ],
       "size": [
         770,
         1370
       ],
       "flags": {},
-      "order": 5,
+      "order": 7,
       "mode": 0,
       "inputs": [],
       "outputs": [
@@ -930,7 +992,7 @@
           "name": "IMAGE",
           "type": "IMAGE",
           "links": [
-            1970
+            2001
           ]
         },
         {
@@ -949,32 +1011,6 @@
         "01_9 (1).png",
         "image"
       ]
-    },
-    {
-      "id": 672,
-      "type": "MarkdownNote",
-      "pos": [
-        -1788.114403859188,
-        77.07127892993472
-      ],
-      "size": [
-        550,
-        550
-      ],
-      "flags": {},
-      "order": 6,
-      "mode": 0,
-      "inputs": [],
-      "outputs": [],
-      "title": "Model links",
-      "properties": {
-        "widget_ue_connectable": {}
-      },
-      "widgets_values": [
-        "[Tutorial](https://docs.comfy.org/tutorials/image/qwen/qwen-image-edit) | [教程](https://docs.comfy.org/zh-CN/tutorials/image/qwen/qwen-image-edit)\n\n## Required custom nodes\n\nThis workflow also requires the following custom nodes:\n\n- [AHEKOT/ComfyUI_VNCCS](https://github.com/AHEKOT/ComfyUI_VNCCS)\n- [tori29umai0123/ComfyUI-SAM3DBody_utills](https://github.com/tori29umai0123/ComfyUI-SAM3DBody_utills)\n\n\n## Model links\n\nYou can find all the models on [Comfy-Org/Qwen-Image_ComfyUI](https://huggingface.co/Comfy-Org/Qwen-Image_ComfyUI/tree/main) and [Comfy-Org/Qwen-Image-Edit_ComfyUI](https://huggingface.co/Comfy-Org/Qwen-Image-Edit_ComfyUI)\n\n**Diffusion model**\n\n- [qwen_image_edit_2511_bf16.safetensors](https://huggingface.co/Comfy-Org/Qwen-Image-Edit_ComfyUI/resolve/main/split_files/diffusion_models/qwen_image_edit_2511_bf16.safetensors)\n\n**LoRA**\n\n- [Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors](https://huggingface.co/lightx2v/Qwen-Image-Edit-2511-Lightning/resolve/main/Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors)\n\n- [VNCCS_PoseStudioQIE2511_V2.safetensors](https://huggingface.co/MIUProject/VNCCS_PoseStudio/resolve/main/models/loras/qwen/VNCCS/VNCCS_PoseStudioQIE2511_V2.safetensors)\n\n**VAE**\n\n- [qwen_image_vae.safetensors](https://huggingface.co/Comfy-Org/Qwen-Image_ComfyUI/resolve/main/split_files/vae/qwen_image_vae.safetensors)\n\n**CLIP**\n\n- [qwen_2.5_vl_7b.safetensors](https://huggingface.co/Comfy-Org/Qwen-Image_ComfyUI/resolve/main/split_files/text_encoders/qwen_2.5_vl_7b.safetensors)\n\nModel Storage Location\n\n```text\n📂 ComfyUI/\n├── 📂 custom_nodes/\n│   ├── 📂 ComfyUI_VNCCS\n│   └── 📂 ComfyUI-SAM3DBody_utills\n├── 📂 models/\n│   ├── 📂 diffusion_models/\n│   │   └── qwen_image_edit_2509_fp8_e4m3fn.safetensors\n│   ├── 📂 loras/QIE\n│   │   ├── Qwen-Image-Lightning-4steps-V1.0.safetensors\n│   │   └── VNCCS_PoseStudioQIE2511_V2.safetensors\n│   ├── 📂 vae/\n│   │   └── qwen_image_vae.safetensors\n│   └── 📂 text_encoders/\n│       └── qwen_2.5_vl_7b_fp8_scaled.safetensors"
-      ],
-      "color": "#432",
-      "bgcolor": "#653"
     }
   ],
   "links": [
@@ -1107,14 +1143,6 @@
       "LATENT"
     ],
     [
-      1970,
-      54,
-      0,
-      667,
-      3,
-      "IMAGE"
-    ],
-    [
       1971,
       662,
       0,
@@ -1123,51 +1151,67 @@
       "IMAGE"
     ],
     [
-      1979,
+      1992,
       655,
       0,
-      673,
+      676,
       0,
       "SAM3D_MODEL"
     ],
     [
-      1980,
+      1993,
       653,
       0,
-      673,
+      676,
       1,
       "IMAGE"
     ],
     [
-      1981,
+      1994,
       656,
       0,
-      673,
+      676,
       2,
       "STRING"
     ],
     [
-      1982,
-      673,
+      1995,
+      674,
+      0,
+      676,
+      3,
+      "STRING"
+    ],
+    [
+      1996,
+      676,
       0,
       662,
       0,
       "IMAGE"
     ],
     [
-      1983,
-      673,
-      0,
-      667,
-      2,
-      "IMAGE"
-    ],
-    [
-      1984,
-      673,
+      1997,
+      676,
       0,
       668,
       0,
+      "IMAGE"
+    ],
+    [
+      2001,
+      54,
+      0,
+      667,
+      3,
+      "IMAGE"
+    ],
+    [
+      2002,
+      676,
+      0,
+      667,
+      2,
       "IMAGE"
     ]
   ],
@@ -1175,10 +1219,10 @@
   "config": {},
   "extra": {
     "ds": {
-      "scale": 0.25937424601001297,
+      "scale": 0.2853116706110176,
       "offset": [
-        4782.464082404351,
-        1973.0721443349353
+        1906.9619076515341,
+        1080.4589615410546
       ]
     },
     "workflowRendererVersion": "LG",

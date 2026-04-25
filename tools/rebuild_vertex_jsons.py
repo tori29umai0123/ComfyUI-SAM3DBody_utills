@@ -33,15 +33,19 @@ sys.path.insert(0, str(NODE_ROOT))
 
 
 def _active_pack_dir() -> Path:
-    """Read active_preset.ini (stdlib only) to find the active pack."""
+    """Read config.ini (or legacy active_preset.ini) — stdlib only — to
+    find the active pack."""
     import configparser
-    ini = NODE_ROOT / "active_preset.ini"
     name = "default"
-    if ini.exists():
+    for ini_name in ("config.ini", "active_preset.ini"):
+        ini = NODE_ROOT / ini_name
+        if not ini.exists():
+            continue
         try:
             cp = configparser.ConfigParser()
             cp.read(ini, encoding="utf-8")
             name = cp.get("active", "pack", fallback="default").strip() or "default"
+            break
         except Exception:
             pass
     pack_dir = NODE_ROOT / "presets" / name

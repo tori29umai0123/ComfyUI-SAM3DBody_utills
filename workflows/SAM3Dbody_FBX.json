@@ -1,8 +1,8 @@
 {
   "id": "c4a72d4a-2f17-4a54-be55-f0c057228a17",
   "revision": 0,
-  "last_node_id": 142,
-  "last_link_id": 446,
+  "last_node_id": 144,
+  "last_link_id": 447,
   "nodes": [
     {
       "id": 52,
@@ -161,7 +161,7 @@
         102
       ],
       "flags": {},
-      "order": 8,
+      "order": 9,
       "mode": 0,
       "inputs": [
         {
@@ -235,7 +235,7 @@
         270
       ],
       "flags": {},
-      "order": 9,
+      "order": 10,
       "mode": 0,
       "inputs": [
         {
@@ -255,43 +255,6 @@
       ]
     },
     {
-      "id": 131,
-      "type": "ImageColorToMask",
-      "pos": [
-        126.79675137986652,
-        -632.9109031619548
-      ],
-      "size": [
-        270,
-        58
-      ],
-      "flags": {},
-      "order": 4,
-      "mode": 0,
-      "inputs": [
-        {
-          "name": "image",
-          "type": "IMAGE",
-          "link": 436
-        }
-      ],
-      "outputs": [
-        {
-          "name": "MASK",
-          "type": "MASK",
-          "links": null
-        }
-      ],
-      "properties": {
-        "cnr_id": "comfy-core",
-        "ver": "0.18.1",
-        "Node name for S&R": "ImageColorToMask"
-      },
-      "widgets_values": [
-        0
-      ]
-    },
-    {
       "id": 123,
       "type": "LoadSAM3DBodyModel",
       "pos": [
@@ -303,7 +266,7 @@
         58
       ],
       "flags": {},
-      "order": 2,
+      "order": 1,
       "mode": 0,
       "inputs": [],
       "outputs": [
@@ -339,7 +302,7 @@
         122
       ],
       "flags": {},
-      "order": 6,
+      "order": 4,
       "mode": 0,
       "inputs": [
         {
@@ -367,11 +330,6 @@
             428,
             444
           ]
-        },
-        {
-          "name": "image",
-          "type": "IMAGE",
-          "links": null
         }
       ],
       "properties": {
@@ -397,7 +355,7 @@
         550
       ],
       "flags": {},
-      "order": 12,
+      "order": 8,
       "mode": 0,
       "inputs": [
         {
@@ -473,7 +431,7 @@
         307.30362419174116
       ],
       "flags": {},
-      "order": 10,
+      "order": 6,
       "mode": 0,
       "inputs": [
         {
@@ -521,15 +479,15 @@
       ]
     },
     {
-      "id": 124,
-      "type": "SAM3DBodyRenderFromJson",
+      "id": 144,
+      "type": "SAM3DBodyRenderFromPoseAndCharaJson",
       "pos": [
         863.5512918187882,
         -750.2589637978243
       ],
       "size": [
         462.15,
-        1086
+        320
       ],
       "flags": {},
       "order": 7,
@@ -553,34 +511,35 @@
             "name": "pose_json"
           },
           "link": 428
+        },
+        {
+          "name": "chara_json",
+          "type": "STRING",
+          "widget": {
+            "name": "chara_json"
+          },
+          "link": 447
         }
       ],
       "outputs": [
         {
           "name": "image",
           "type": "IMAGE",
+          "slot_index": 0,
           "links": [
             430,
             432
-          ]
-        },
-        {
-          "name": "settings_json",
-          "type": "STRING",
-          "links": [
-            443
           ]
         }
       ],
       "properties": {
         "aux_id": "tori29umai0123/ComfyUI-SAM3DBody_utills",
-        "ver": "0.2.1",
-        "Node name for S&R": "SAM3DBodyRenderFromJson",
-        "cnr_id": "comfyui-sam3dbody_utills"
+        "ver": "0de650cee18b821369cd98fe43dfcd8e3e5f8a10",
+        "Node name for S&R": "SAM3DBodyRenderFromPoseAndCharaJson"
       },
       "widgets_values": [
         "{}",
-        "female",
+        "{}",
         0,
         0,
         1,
@@ -588,7 +547,42 @@
         0,
         0,
         0,
-        0,
+        0
+      ]
+    },
+    {
+      "id": 143,
+      "type": "SAM3DBodySettingCharaJson",
+      "pos": [
+        287.92238643975895,
+        -752.1090262838887
+      ],
+      "size": [
+        380,
+        1086
+      ],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "chara_json",
+          "type": "STRING",
+          "slot_index": 0,
+          "links": [
+            447,
+            443
+          ]
+        }
+      ],
+      "properties": {
+        "aux_id": "tori29umai0123/ComfyUI-SAM3DBody_utills",
+        "ver": "0de650cee18b821369cd98fe43dfcd8e3e5f8a10",
+        "Node name for S&R": "SAM3DBodySettingCharaJson"
+      },
+      "widgets_values": [
+        "female",
         -0.5,
         0,
         0,
@@ -686,7 +680,7 @@
       426,
       123,
       0,
-      124,
+      144,
       0,
       "SAM3D_MODEL"
     ],
@@ -694,7 +688,7 @@
       427,
       51,
       0,
-      124,
+      144,
       1,
       "IMAGE"
     ],
@@ -702,13 +696,13 @@
       428,
       45,
       0,
-      124,
+      144,
       2,
       "STRING"
     ],
     [
       430,
-      124,
+      144,
       0,
       95,
       1,
@@ -716,7 +710,7 @@
     ],
     [
       432,
-      124,
+      144,
       0,
       125,
       0,
@@ -732,8 +726,8 @@
     ],
     [
       443,
-      124,
-      1,
+      143,
+      0,
       139,
       1,
       "STRING"
@@ -753,16 +747,24 @@
       142,
       2,
       "STRING"
+    ],
+    [
+      447,
+      143,
+      0,
+      144,
+      3,
+      "STRING"
     ]
   ],
   "groups": [],
   "config": {},
   "extra": {
     "ds": {
-      "scale": 0.3914251301220557,
+      "scale": 0.5209868481924584,
       "offset": [
-        2173.900681786182,
-        2213.3477018029635
+        1152.3532990192257,
+        1191.0027935698718
       ]
     },
     "frontendVersion": "1.42.8",

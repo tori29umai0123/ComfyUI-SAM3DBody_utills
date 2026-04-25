@@ -6,7 +6,12 @@
 # by `comfy-env`. Only the lightweight bootstrap packages needed to
 # load THIS file and run the dispatcher sit in requirements.txt.
 
-comfy-env==0.1.91
+# Pinned to 0.1.75 because 0.1.76+ calls ``Path.is_junction()``
+# unconditionally on Windows (isolation/wrap.py:208), which only exists
+# on Python 3.12+. ComfyUI's bundled venv ships Python 3.11 so that call
+# raises AttributeError and aborts node loading. 0.1.75 is the last
+# release without the offending check.
+comfy-env==0.1.75
 comfy-3d-viewers==0.2.15
 msvc-runtime; sys_platform == "win32"
 
