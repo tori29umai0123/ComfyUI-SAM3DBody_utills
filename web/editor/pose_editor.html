@@ -19,6 +19,94 @@
   }
   #confirm-and-close-btn:hover { background: #36994f; }
   #confirm-hint { color: #aaa; font-size: 12px; margin-left: 6px; }
+
+  /* --- Image-range selection UI (overlay on top of #viewport) ----------- */
+  /* Overlay sits BELOW the viewport buttons (z-index 5 vs the buttons'
+     z-index ≥ 6) so the user can still toggle range mode / change the bg
+     color while range select is active. */
+  #range-overlay {
+    position: absolute; inset: 0; pointer-events: none; z-index: 5;
+  }
+  #range-select-btn { z-index: 7; }
+  body.range-select-mode #range-overlay { pointer-events: auto; cursor: crosshair; }
+  #range-rect {
+    position: absolute; border: 2px solid #ff5050;
+    background: rgba(255, 0, 0, 0.28);
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.45) inset;
+    pointer-events: none;
+  }
+  #range-rect[hidden] { display: none; }
+
+  /* While range-select is active, dim the rest of the UI and lock everything
+     except the range button and the background color button. */
+  body.range-select-mode #sidebar,
+  body.range-select-mode .tab-nav,
+  body.range-select-mode .lang-picker,
+  body.range-select-mode #confirm-and-close-btn,
+  body.range-select-mode #bg-color-btn {
+    pointer-events: none; user-select: none; opacity: 0.45;
+  }
+  body.range-select-mode #range-select-btn {
+    background: #5a2a2a; color: #fcc; border-color: #944;
+  }
+
+  /* "Background color" button: small swatch + label + hidden native input. */
+  #bg-color-btn {
+    position: absolute; top: 50px; left: 12px;
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 6px 12px; background: rgba(30, 46, 60, 0.85); color: #cef;
+    border: 1px solid #588; border-radius: 4px; font-size: 12px; cursor: pointer;
+    backdrop-filter: blur(2px); z-index: 6;
+  }
+  #bg-color-btn:hover { background: rgba(52, 82, 100, 0.9); }
+
+  /* Hand image input row: drop area + 左右反転 button on one line. */
+  .hand-input-row {
+    display: flex; gap: 6px; align-items: stretch; margin-top: 6px;
+  }
+  .hand-input-row .file-drop {
+    flex: 1 1 auto; margin-top: 0;
+  }
+  .hand-input-row .hand-flip-btn {
+    flex: 0 0 auto; padding: 4px 10px; font-size: 11px;
+    background: #355; color: #cef; border: 1px solid #588;
+    border-radius: 4px; cursor: pointer;
+  }
+  .hand-input-row .hand-flip-btn:hover:not(:disabled) {
+    background: rgba(85, 119, 136, 0.9);
+  }
+  .hand-input-row .hand-flip-btn:disabled {
+    background: rgba(34, 36, 42, 0.7); color: #667;
+    border-color: #333; cursor: not-allowed;
+  }
+  .hand-drop img {
+    display: block; max-width: 100%; max-height: 96px;
+    margin: 4px auto 0; border: 1px solid #2a2a2a; border-radius: 3px;
+  }
+
+  /* "Range reset" button — only visible while range-select mode is active.
+     Sits to the right of #range-select-btn and is hidden by default; CSS
+     reveals it when ``body.range-select-mode`` is set. */
+  #range-reset-btn {
+    position: absolute; top: 12px; left: 110px; display: none;
+    padding: 6px 12px; background: rgba(60, 32, 32, 0.85); color: #fcc;
+    border: 1px solid #944; border-radius: 4px; font-size: 12px;
+    cursor: pointer; backdrop-filter: blur(2px); z-index: 7;
+  }
+  #range-reset-btn:hover:not(:disabled) { background: rgba(110, 50, 50, 0.9); }
+  #range-reset-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+  body.range-select-mode #range-reset-btn { display: inline-block; }
+  /* Range-select-mode lockout doesn't apply to the reset button — it must
+     stay clickable while the mode is active. */
+  body.range-select-mode #range-reset-btn { pointer-events: auto; opacity: 1; }
+  #bg-color-swatch {
+    width: 18px; height: 18px; border-radius: 3px;
+    border: 1px solid rgba(255, 255, 255, 0.6); background: #ffffff;
+    flex: 0 0 18px;
+  }
+  #bg-color-input {
+    position: absolute; opacity: 0; pointer-events: none; width: 0; height: 0;
+  }
 </style>
 <script type="importmap">
 {
@@ -65,6 +153,32 @@
           <span id="file-label" data-i18n="input.drop">クリックして画像を選択 / ドロップ</span>
           <img id="preview" alt="preview" hidden />
         </label>
+
+        <!-- Optional per-hand crops. Drag&drop or click; the 左右反転 button
+             flips the loaded image in place. When provided, the editor sends
+             these alongside the main image so the hand-only decoder can
+             override the body's hand pose. -->
+        <div class="hand-input-row">
+          <label class="file-drop compact hand-drop" id="lhand-drop">
+            <input type="file" id="lhand-file-input" accept="image/*" />
+            <span id="lhand-file-label" data-i18n="input.lhand_drop">Left hand image</span>
+            <img id="lhand-preview" alt="left hand" hidden />
+          </label>
+          <button type="button" id="lhand-flip-btn" class="hand-flip-btn"
+                  disabled data-i18n="input.flip_lr"
+                  data-i18n-title="tooltip.hand_flip">左右反転</button>
+        </div>
+        <div class="hand-input-row">
+          <label class="file-drop compact hand-drop" id="rhand-drop">
+            <input type="file" id="rhand-file-input" accept="image/*" />
+            <span id="rhand-file-label" data-i18n="input.rhand_drop">Right hand image</span>
+            <img id="rhand-preview" alt="right hand" hidden />
+          </label>
+          <button type="button" id="rhand-flip-btn" class="hand-flip-btn"
+                  disabled data-i18n="input.flip_lr"
+                  data-i18n-title="tooltip.hand_flip">左右反転</button>
+        </div>
+
         <button id="run-btn" disabled data-i18n="input.run">ポーズを推定</button>
         <div id="run-info" class="muted"></div>
       </section>
@@ -137,9 +251,24 @@
   <section id="viewport" data-tab-show="image">
     <canvas id="three-canvas"></canvas>
     <div id="viewport-overlay" class="muted" data-i18n="viewport.initial">画像を読み込んで「ポーズを推定」を押すと 3D メッシュが表示されます</div>
-    <button id="save-render-btn" class="viewport-btn" data-tab-show="image" data-pose-lock
-            disabled data-i18n="viewport.save_png"
-            data-i18n-title="tooltip.save_png">PNG 保存</button>
+    <button id="range-select-btn" class="viewport-btn" data-tab-show="image" data-pose-lock
+            disabled data-i18n="viewport.range_enter"
+            data-i18n-title="tooltip.range_select">画像範囲</button>
+    <button id="range-reset-btn" type="button" data-tab-show="image"
+            data-i18n="viewport.range_reset"
+            data-i18n-title="tooltip.range_reset">画像範囲指定reset</button>
+    <button id="bg-color-btn" type="button" data-tab-show="image" data-pose-lock
+            data-i18n-title="tooltip.bg_color">
+      <span id="bg-color-swatch"></span>
+      <span data-i18n="viewport.bg_color">背景色指定</span>
+      <input type="color" id="bg-color-input" value="#ffffff" />
+    </button>
+    <div id="range-overlay">
+      <div id="range-rect" hidden></div>
+    </div>
+    <!-- Stub: kept for editor_core.js compatibility (id is referenced in
+         INFERENCE_LOCK_IDS / various save handlers). Not visible. -->
+    <button id="save-render-btn" hidden disabled></button>
   </section>
 </main>
 
@@ -192,8 +321,8 @@
   <pre id="health"></pre>
 </div>
 
-<script src="/extensions/ComfyUI-SAM3DBody_utills/editor/static/editor_init.js?v=5"></script>
-<script type="module" src="/extensions/ComfyUI-SAM3DBody_utills/editor/static/i18n.js?v=5"></script>
-<script type="module" src="/extensions/ComfyUI-SAM3DBody_utills/editor/static/editor_core.js?v=5"></script>
+<script src="/extensions/ComfyUI-SAM3DBody_utills/editor/static/editor_init.js?v=10"></script>
+<script type="module" src="/extensions/ComfyUI-SAM3DBody_utills/editor/static/i18n.js?v=10"></script>
+<script type="module" src="/extensions/ComfyUI-SAM3DBody_utills/editor/static/editor_core.js?v=10"></script>
 </body>
 </html>

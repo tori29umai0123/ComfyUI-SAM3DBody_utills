@@ -619,6 +619,18 @@
           "shape": 7,
           "type": "MASK",
           "link": null
+        },
+        {
+          "name": "Left_hand_image",
+          "shape": 7,
+          "type": "IMAGE",
+          "link": null
+        },
+        {
+          "name": "Right_hand_image",
+          "shape": 7,
+          "type": "IMAGE",
+          "link": null
         }
       ],
       "outputs": [
@@ -628,11 +640,6 @@
           "links": [
             1994
           ]
-        },
-        {
-          "name": "image",
-          "type": "IMAGE",
-          "links": null
         }
       ],
       "properties": {

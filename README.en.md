@@ -41,13 +41,18 @@ https://github.com/user-attachments/assets/4fa43a56-8dd2-4ebf-8abe-61a31ff14e6f
 2. **SAM 3D Body: Process Image to Pose JSON** — runs SAM 3D Body on the input image and emits the pose as JSON.
    - When the `mask` input is left unconnected, falls back to internal BiRefNet Lite auto-masking
    - For higher tracking accuracy on tricky footage, connect an explicit `MASK` node
+   - **Optional `Left_hand_image` / `Right_hand_image` inputs** — feeding an IMAGE here triggers a hand-only decoder pass that overrides only `hand_pose_params[:54]` (left) / `[54:]` (right). The body's wrist orientation is preserved. No additional outputs.
 
 ### Character authoring / rendering
 3. **SAM 3D Body: Setting Chara JSON** — bundles the preset selector + body / bone / blendshape sliders and emits `chara_json` (STRING). Split out from the old render node so character state can be authored once and reused.
 4. **SAM 3D Body: Render Human From Pose And Chara JSON** — takes `pose_json` + `chara_json` as inputs; the only widget-driven controls left are camera (`offset_x/y` / `scale_offset` / `camera_yaw/pitch_deg` / `width` / `height`) and lean correction (`pose_adjust`).
 
 ### Web-UI editors (in-page browser modals, JA/EN switchable)
-5. **SAM 3D Body: Pose Editor** — click "Open Pose Editor" to launch. Upload an image → segmentation + pose inference → fine-tune bones in the 3D viewport → confirm to emit `pose_json` (STRING) plus `width` / `height` (INT).
+5. **SAM 3D Body: Pose Editor** — click "Open Pose Editor" to launch. Upload an image → segmentation + pose inference → fine-tune bones in the 3D viewport → confirm. The node returns **seven outputs**:
+   - `pose_json` (STRING), `width` / `height` (INT)
+   - `pose_image` (IMAGE) — the 3D viewport screenshot. The editor exposes an "Image range" button (drag a red rectangle to crop) and a "Background color" button (color picker, default white), both reflected in this output
+   - `input_image` (IMAGE) — the uploaded source image, passed straight through
+   - `hand_l_image` / `hand_r_image` (IMAGE) — the per-hand crops you loaded in the editor (mirrored if you used the in-editor flip), useful for inspection or downstream use
 6. **SAM 3D Body: Character Editor** — click "Open Character Editor" to launch. Sculpt the body with sliders + 3D preview; confirm to emit `chara_json` (STRING).
 
 ### FBX / BVH export (all Blender-required)
@@ -120,23 +125,11 @@ Blender downloads:
 
 3. Launch ComfyUI — on first run the SAM 3D Body weights (~1.5 GB) auto-download from `jetjodh/sam-3d-body-dinov3` into `<ComfyUI>/models/sam3dbody/`.
 
-### Manual installation steps
-
-For when the auto-downloader fails or you want finer control over the environment.
-
-#### 1. Install bootstrap dependencies
-
-```
-C:/ComfyUI/.venv/Scripts/python.exe -m pip install -r requirements.txt
-```
-
-This puts the lightweight bootstrap deps (`comfy-env`, `comfy-3d-viewers`, `numpy`, `pillow`, `opencv-python-headless`, …) into the main venv.
-
-#### 2. Set up the isolated environment (heavy dependencies)
-
-```
-C:/ComfyUI/.venv/Scripts/python.exe install.py
-```
+> If you hit `AttributeError: 'WindowsPath' object has no attribute 'is_junction'` on Python 3.11, another `comfy-env`-using custom node has pulled in a version of `comfy-env` too new for Python 3.11. Find that other custom node and pin its `requirements.txt` to:
+>
+> ```
+> comfy-env==0.1.75
+> ```
 
 ## License
 
@@ -189,6 +182,28 @@ Instead of poking at slider widgets on the ComfyUI canvas, two purpose-built nod
 ![Pose Editor](docs/sample5.png)
 
 The node carries an **"Open Pose Editor"** button. Click it to upload an image, run segmentation + pose inference, fine-tune bones in the 3D viewport (rotation / IK translate / lean correction), and finally hit **"Confirm & Close / 確定して閉じる"**. The node then emits `pose_json` (STRING) plus the source image's `width` / `height` (INT) so it plugs straight into `SAM 3D Body: Render Human From Pose And Chara JSON`.
+
+**Image outputs (IMAGE)**: confirming also returns four IMAGE outputs:
+
+| Output | Contents |
+|---|---|
+| `pose_image` | Screenshot of the 3D viewport (with the in-editor crop and background color applied — see below) |
+| `input_image` | The uploaded source image, passed through unchanged (handy for compositing / before-after comparison) |
+| `hand_l_image` | The left-hand crop loaded into the Input section (post-mirror if used) |
+| `hand_r_image` | Same for the right hand |
+
+**Image range / background color (for `pose_image`)**: the top-left corner of the 3D viewport now hosts a **"Image range"** button and a **"Background color"** button.
+
+- Clicking "Image range" toggles the entry button to "Finish range select" and reveals a translucent red overlay. Drag to define a rectangle — that region (and its size) becomes the `pose_image` output. While the mode is active everything else in the sidebar is locked; only the range / background-color / reset buttons remain interactive.
+- A **"Reset range"** button shown only inside the mode wipes the saved rectangle. Pressing "Finish range select" hides the buttons and the red overlay; re-entering the mode shows the previously saved rectangle.
+- "Background color" is a color picker for the `pose_image` background (default white).
+- If neither a range nor a background is set, `pose_image` falls back to a full-viewport white capture, matching the previous default.
+
+**Hand image overrides**: in the Input section, below the main image drop area you'll find drag-and-drop slots for **Left hand image** and **Right hand image**, each paired with a "Mirror" button.
+
+- Mirror flips the loaded image at the pixel level on a canvas, so the data sent to the server (and surfaced via `hand_l_image` / `hand_r_image`) reflects what you see.
+- When a hand image is provided, "Run pose estimation" feeds it through a hand-only decoder pass and overrides `hand_pose_params[:54]` (left) / `[54:]` (right) on the body's pose. The wrist orientation from the body decoder is preserved.
+- Leave the slots empty for the prior behaviour (full-body inference's hands are kept).
 
 #### `SAM 3D Body: Character Editor` — confirm the body shape in the browser
 

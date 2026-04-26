@@ -41,13 +41,18 @@ https://github.com/user-attachments/assets/4fa43a56-8dd2-4ebf-8abe-61a31ff14e6f
 2. **SAM 3D Body: Process Image to Pose JSON** — SAM 3D Body で入力画像を解析し、ポーズを JSON として出力
    - `mask` 入力が未接続の場合は内蔵 BiRefNet Lite による自動マスクにフォールバック
    - 精度を上げたいときは明示的に `MASK` ノードを接続
+   - **任意入力 `Left_hand_image` / `Right_hand_image`** — IMAGE を渡すと hand-only decoder で別途解析し、本体推論結果の `hand_pose_params[:54]` (左) / `[54:]` (右) のみを上書き。手首の向きは本体ポーズに従います。出力ノードの追加はなし
 
 ### キャラ設定 / レンダリング
 3. **SAM 3D Body: Setting Chara JSON** — preset と body / bone / blendshape スライダー一式を持ち、`chara_json` (STRING) を出力する設定ノード（旧 Render ノードのキャラ系部分が独立化）
 4. **SAM 3D Body: Render Human From Pose And Chara JSON** — `pose_json` + `chara_json` を入力に取り、カメラ系設定 (`offset_x/y` / `scale_offset` / `camera_yaw/pitch_deg` / `width` / `height`) と前のめり補正 (`pose_adjust`) のみウィジェット化したレンダリングノード
 
 ### Web UI エディタ（ブラウザ内モーダル、JA/EN 切替）
-5. **SAM 3D Body: Pose Editor** — 「Open Pose Editor」ボタンで起動。画像アップ → セグメンテーション + ポーズ推定 → 3D ボーン微調整 → 確定で `pose_json` (STRING) と `width` / `height` (INT) を出力
+5. **SAM 3D Body: Pose Editor** — 「Open Pose Editor」ボタンで起動。画像アップ → セグメンテーション + ポーズ推定 → 3D ボーン微調整 → 確定で **7 種の出力**を返します:
+   - `pose_json` (STRING)、`width` / `height` (INT)
+   - `pose_image` (IMAGE) — 3D ビューのスクリーンショット。エディタ内の `画像範囲` ボタンで赤枠 D&D による出力範囲指定 + `背景色指定` で背景色変更が可能
+   - `input_image` (IMAGE) — アップロードした元画像をそのまま再出力
+   - `hand_l_image` / `hand_r_image` (IMAGE) — エディタで読み込んだ手画像（左右反転反映済み）。エディタの Input セクション内 D&D 入力欄から指定でき、入っている場合は本体ポーズの手だけを上書きします
 6. **SAM 3D Body: Character Editor** — 「Open Character Editor」ボタンで起動。スライダー + 3D プレビューで体形を作り込み、確定で `chara_json` (STRING) を出力
 
 ### FBX / BVH 書き出し（いずれも Blender 必須）
@@ -120,23 +125,10 @@ Blender ダウンロード先:
 
 3. ComfyUI を起動 — 初回起動時に `jetjodh/sam-3d-body-dinov3` から SAM 3D Body のモデル重み (約 1.5 GB) が `<ComfyUI>/models/sam3dbody/` へ自動ダウンロードされます
 
-### 手動インストール手順
-
-自動ダウンロードが失敗する場合や、環境を細かく制御したい場合の手順です。
-
-#### 1. ブートストラップ依存をインストール
-
-```
-C:/ComfyUI/.venv/Scripts/python.exe -m pip install -r requirements.txt
-```
-
-これで `comfy-env`, `comfy-3d-viewers`, `numpy`, `pillow`, `opencv-python-headless` などの軽量依存がメイン venv に入ります。
-
-#### 2. 分離環境 (heavy dependencies) をセットアップ
-
-```
-C:/ComfyUI/.venv/Scripts/python.exe install.py
-```
+※python3.11系でAttributeError: 'WindowsPath' object has no attribute 'is_junction'
+というエラーが出てくる場合は、他のcomfy-envを使ったカスタムノードで、comfy-envのバージョンがpython3.11には新しすぎる為起きています。
+他のcomfy-envを使ったカスタムノードを見つけだし、そのrequirements.txtを以下に書き換えて下さい。
+comfy-env==0.1.75
 
 ## License
 
@@ -189,6 +181,28 @@ ComfyUI のキャンバス上のスライダーで延々と数値を打ち込む
 ![Pose Editor](docs/sample5.png)
 
 ノードに付いた **「Open Pose Editor」** ボタンを押すと、画像アップロード → セグメンテーション + ポーズ推定 → 3D ビュー上でのボーン微調整 (回転 / IK 移動 / 前かがみ補正) → **「Confirm & Close / 確定して閉じる」** までを 1 つのモーダル内で完結できます。確定すると `pose_json` (STRING) と画像サイズ `width` / `height` (INT) がノードから出力され、`SAM 3D Body: Render Human From Pose And Chara JSON` の入力に直接繋げます。
+
+**画像出力 (IMAGE)**: 確定時に以下の 4 つの IMAGE 出力もあわせて返されます。
+
+| 出力 | 内容 |
+|---|---|
+| `pose_image` | 3D ビューのスクリーンショット（後述の範囲指定／背景色指定が反映される） |
+| `input_image` | アップロードした元画像をそのまま再出力（後段の合成・比較用） |
+| `hand_l_image` | エディタの Input 内に読み込んだ左手画像（左右反転後） |
+| `hand_r_image` | 同・右手画像 |
+
+**画像範囲 / 背景色指定 (`pose_image` 用)**: 3D ビューの左上に **「画像範囲」** ボタンと **「背景色指定」** ボタンが出ます。
+
+- 「画像範囲」を押すとボタンが「画像範囲指定を終了」に変化し、半透明の赤いオーバーレイが現れます。ドラッグで矩形を引くと、その範囲だけが `pose_image` の出力範囲・出力サイズとして使われます。範囲指定中は他のサイドバー操作はロックされます（範囲ボタン・背景色・リセットのみ操作可）。
+- 同モード中に出る **「画像範囲指定reset」** ボタンで保存された範囲をクリアできます。「画像範囲指定を終了」を押すとボタン群と赤枠は消え、再度入ると前回の範囲が赤枠で再表示されます。
+- 「背景色指定」のカラーピッカーで `pose_image` の背景色を選べます (既定は白)。
+- 範囲も背景色も指定しなかった場合は、従来どおり全画面・白背景で `pose_image` が生成されます。
+
+**手画像の入力で手だけ上書き**: Input セクションのメイン画像入力の下に **Left hand image** / **Right hand image** の D&D 入力欄があり、それぞれ右に **「左右反転」** ボタンが付きます。
+
+- 反転ボタンは canvas 上で実ピクセルを反転するため、サーバ送信時の画像にもそのまま反映されます。
+- 手画像を入れて「ポーズを推定」を押すと、本体ポーズに加えて hand-only decoder で手の解析が走り、`hand_pose_params[:54]` (左) / `[54:]` (右) を上書きします。手首の向きは本体ポーズに従います。
+- 何も入れなければ従来通り全身推論の手ポーズがそのまま使われます。
 
 #### `SAM 3D Body: Character Editor` — ブラウザで体形を確定
 

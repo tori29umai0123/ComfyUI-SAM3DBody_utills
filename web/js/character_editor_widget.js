@@ -12,25 +12,32 @@ const TARGET_NODE = "SAM3DBodyCharacterEditor";
 const CONFIRM_MSG = "sam3d-chara-confirmed";
 const CANCEL_MSG  = "sam3d-chara-cancelled";
 const HIDDEN_NAME = "chara_json";
+const HIDDEN_CHARA_IMG = "chara_image";
 const STATUS_NAME = "status";
 const EDITOR_PATH = "/sam3d/editor/character";
 const MODAL_ID    = "sam3d-chara-editor-modal";
+
+function _ensureHidden(node, name) {
+    let w = node.widgets?.find((x) => x.name === name);
+    if (!w) {
+        w = node.addWidget("text", name, "", () => {}, {
+            multiline: false,
+            serialize: true,
+        });
+    }
+    w.serialize = true;
+    w.computeSize = () => [0, -4];
+    w.draw = () => {};
+    w.type = "hidden";
+    return w;
+}
 
 function attachWidgets(node) {
     if (node.__sam3dCharaEditorAttached) return;
     node.__sam3dCharaEditorAttached = true;
 
-    let hiddenWidget = node.widgets?.find((w) => w.name === HIDDEN_NAME);
-    if (!hiddenWidget) {
-        hiddenWidget = node.addWidget("text", HIDDEN_NAME, "", () => {}, {
-            multiline: false,
-            serialize: true,
-        });
-    }
-    hiddenWidget.serialize = true;
-    hiddenWidget.computeSize = () => [0, -4];
-    hiddenWidget.draw = () => {};
-    hiddenWidget.type = "hidden";
+    const hiddenWidget    = _ensureHidden(node, HIDDEN_NAME);
+    const hiddenCharaImg  = _ensureHidden(node, HIDDEN_CHARA_IMG);
 
     const statusWidget = node.addWidget(
         "text",
@@ -47,14 +54,16 @@ function attachWidgets(node) {
 
     const refresh = () => {
         const v = hiddenWidget.value || "";
+        const imgFlag = hiddenCharaImg.value ? " +img" : "";
         statusWidget.value = v
-            ? `confirmed (${v.length} chars)`
+            ? `confirmed (${v.length} chars)${imgFlag}`
             : "(未確定 / unset)";
         node.setDirtyCanvas?.(true, true);
     };
     refresh();
-    node.__sam3dCharaRefresh = refresh;
-    node.__sam3dCharaHidden = hiddenWidget;
+    node.__sam3dCharaRefresh    = refresh;
+    node.__sam3dCharaHidden     = hiddenWidget;
+    node.__sam3dCharaImgHidden  = hiddenCharaImg;
 
     const origConfig = node.onConfigure;
     node.onConfigure = function (info) {
@@ -103,7 +112,7 @@ function closeModal() {
 function openEditor(node) {
     ensureModalStyles();
     closeModal();
-    const url = `${EDITOR_PATH}?node_id=${encodeURIComponent(node.id)}&embed=1`;
+    const url = `${EDITOR_PATH}?node_id=${encodeURIComponent(node.id)}&embed=1&_t=${Date.now()}`;
     const backdrop = document.createElement("div");
     backdrop.className = "sam3d-modal-backdrop";
     backdrop.id = MODAL_ID;
@@ -130,11 +139,15 @@ window.addEventListener("message", (evt) => {
         return;
     }
     if (evt.data.type !== CONFIRM_MSG) return;
-    const { node_id, chara_json } = evt.data;
+    const { node_id, chara_json, chara_image } = evt.data;
     if (typeof chara_json !== "string") return;
     const target = app.graph?.getNodeById?.(Number(node_id));
     if (target && target.comfyClass === TARGET_NODE && target.__sam3dCharaHidden) {
         target.__sam3dCharaHidden.value = chara_json;
+        if (target.__sam3dCharaImgHidden) {
+            target.__sam3dCharaImgHidden.value =
+                typeof chara_image === "string" ? chara_image : "";
+        }
         target.__sam3dCharaRefresh?.();
     }
     closeModal();

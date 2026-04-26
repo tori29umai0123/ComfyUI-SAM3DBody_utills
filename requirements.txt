@@ -12,7 +12,7 @@
 # raises AttributeError and aborts node loading. 0.1.75 is the last
 # release without the offending check.
 comfy-env==0.1.75
-comfy-3d-viewers==0.2.15
+comfy-3d-viewers==0.2.33
 msvc-runtime; sys_platform == "win32"
 
 # Core (also redeclared in comfy-env.toml)

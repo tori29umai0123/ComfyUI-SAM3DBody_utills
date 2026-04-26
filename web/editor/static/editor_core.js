@@ -1238,6 +1238,72 @@ function initViewer() {
     }
   }
 
+  // Render-to-PNG-DataURL with a custom background and (optional) crop. Used
+  // by the editor confirm pipeline to produce pose_image / chara_image
+  // outputs. ``cropRect`` is in canvas BACKING-store pixels (i.e. drawing
+  // buffer pixels — already multiplied by devicePixelRatio).
+  // ``framing`` is "current" (use the orbit camera as-is) or "fit_full_body"
+  // (frame the body height-fit, ground-aligned, suitable for chara_image).
+  function captureImage({ bgColor = 0xffffff, cropRect = null, framing = "current" } = {}) {
+    const prevClearColor = renderer.getClearColor(new THREE.Color());
+    const prevClearAlpha = renderer.getClearAlpha();
+    const prevGridVisible = grid.visible;
+    const prevCamPos = camera.position.clone();
+    const prevTarget = controls.target.clone();
+    renderer.setClearColor(bgColor, 1);
+    grid.visible = false;
+    let resultUrl = null;
+    let outW = 0, outH = 0;
+    try {
+      if (framing === "fit_full_body" && meshGroup) {
+        const box = new THREE.Box3().setFromObject(meshGroup);
+        const center = new THREE.Vector3();
+        const size = new THREE.Vector3();
+        box.getCenter(center);
+        box.getSize(size);
+        const fov = camera.fov * Math.PI / 180;
+        // Distance at which size.y just fills the frame vertically.
+        const distH = (Math.max(size.y, 1e-3) / 2) / Math.tan(fov / 2);
+        // Horizontal fov = 2 * atan(aspect * tan(fov/2)).
+        const distW = (Math.max(size.x, 1e-3) / 2)
+                      / (Math.max(camera.aspect, 1e-3) * Math.tan(fov / 2));
+        // 15% padding so the body doesn't kiss the frame edges.
+        const dist = Math.max(distH, distW) * 1.15;
+        controls.target.copy(center);
+        camera.position.set(center.x, center.y, center.z + Math.max(dist, 1.5));
+        camera.lookAt(center);
+        controls.update();
+      }
+      renderer.render(scene, camera);
+      if (cropRect && cropRect.width > 0 && cropRect.height > 0) {
+        const { x, y, width, height } = cropRect;
+        const cw = canvas.width, ch = canvas.height;
+        const sx = Math.max(0, Math.min(cw - 1, Math.round(x)));
+        const sy = Math.max(0, Math.min(ch - 1, Math.round(y)));
+        const sw = Math.max(1, Math.min(cw - sx, Math.round(width)));
+        const sh = Math.max(1, Math.min(ch - sy, Math.round(height)));
+        const off = document.createElement("canvas");
+        off.width = sw; off.height = sh;
+        off.getContext("2d").drawImage(canvas, sx, sy, sw, sh, 0, 0, sw, sh);
+        resultUrl = off.toDataURL("image/png");
+        outW = sw; outH = sh;
+      } else {
+        resultUrl = canvas.toDataURL("image/png");
+        outW = canvas.width; outH = canvas.height;
+      }
+    } finally {
+      renderer.setClearColor(prevClearColor, prevClearAlpha);
+      grid.visible = prevGridVisible;
+      if (framing !== "current") {
+        camera.position.copy(prevCamPos);
+        controls.target.copy(prevTarget);
+        controls.update();
+      }
+      _dirty = true;
+    }
+    return { dataUrl: resultUrl, width: outW, height: outH };
+  }
+
   // Wipe the Hips drag translation and snap meshGroup back to the fit
   // anchor. Used by the outer code when a fresh pose is estimated and
   // any prior body translation should be discarded.
@@ -1260,12 +1326,14 @@ function initViewer() {
   }
 
   return {
-    loadObj, loadFbxAnimated, savePng, switchTab, hasCachedMesh, clearMesh,
+    loadObj, loadFbxAnimated, savePng, captureImage, switchTab, hasCachedMesh, clearMesh,
     enterPoseEdit, exitPoseEdit, selectPoseBone, resetPoseBone,
     resetAllPoseBones, setPoseBoneLocalEuler, getPoseBoneLocalEuler,
     setPoseEditCallbacks, clearHipsTranslation,
     getHipsOffset, setHipsOffset,
     isPoseEditActive: () => poseEdit.active,
+    getCanvasSize: () => ({ width: canvas.width, height: canvas.height }),
+    getCanvasClientSize: () => ({ width: canvas.clientWidth, height: canvas.clientHeight }),
   };
 }
 
@@ -1978,6 +2046,8 @@ async function triggerRender() {
     renderAvailable = true;
     const savePngBtn = document.getElementById("save-render-btn");
     if (savePngBtn) savePngBtn.disabled = false;
+    const rangeBtn = document.getElementById("range-select-btn");
+    if (rangeBtn) rangeBtn.disabled = false;
     // Clear the initial viewport hint once a mesh is actually on screen.
     if (overlay.textContent) overlay.textContent = "";
     const ms = Math.round(performance.now() - t0);
@@ -2193,7 +2263,7 @@ const INFERENCE_LOCK_IDS = [
   "pose-rot-z-range", "pose-rot-z-num",
   "pose-undo-btn", "pose-redo-btn",
   "pose-reset-bone-btn", "pose-reset-all-btn",
-  "save-render-btn",
+  "save-render-btn", "range-select-btn", "bg-color-btn",
   "export-fbx-btn", "export-bvh-btn",
   // Video tab
   "video-input",
@@ -2330,6 +2400,21 @@ runBtn.addEventListener("click", async () => {
   const signal = beginInference(runBtn, "input.run", "input.stop");
   const form = new FormData();
   form.append("image", selectedFile);
+  // Optional per-hand crops. The server runs the hand-only decoder on
+  // each one and overrides the body's hand pose; absent fields are
+  // ignored. Filenames are arbitrary — the API keys (left_hand_image /
+  // right_hand_image) are what matter.
+  try {
+    const hands = window.__sam3dGetHandImages?.() || {};
+    if (hands.left?.dataUrl) {
+      const blob = window.__sam3dDataUrlToBlob?.(hands.left.dataUrl);
+      if (blob) form.append("left_hand_image", blob, "left_hand.png");
+    }
+    if (hands.right?.dataUrl) {
+      const blob = window.__sam3dDataUrlToBlob?.(hands.right.dataUrl);
+      if (blob) form.append("right_hand_image", blob, "right_hand.png");
+    }
+  } catch (e) { console.warn("[SAM3D] attaching hand images failed:", e); }
   try {
     const r = await fetch("/sam3d/api/process", { method: "POST", body: form, signal });
     if (!r.ok) throw new Error(`HTTP ${r.status}: ${await r.text()}`);
@@ -2924,3 +3009,411 @@ setTimeout(() => {
   refreshEditorPosePayload();
   refreshEditorCharaPayload();
 }, 100);
+
+// ---------------------------------------------------------------------------
+// Pose-editor image-output wiring (画像範囲 / 背景色指定 / pose_image &
+// input_image capture for the SAM3DBodyPoseEditor node).
+//
+// Lives at the tail of editor_core.js so all module-level state (viewer,
+// selectedFile, refreshEditorPosePayload, ...) is already in scope. Every
+// hook checks for the existence of its DOM element so character_editor.html
+// — which doesn't expose these controls — silently no-ops.
+// ---------------------------------------------------------------------------
+(function initPoseImageRangeUi() {
+  // Persistent capture state. Range rect is in canvas BACKING-store pixels
+  // (devicePixelRatio applied) so captureImage can crop directly without
+  // re-mapping. ``null`` = no range = capture full viewport on confirm.
+  const state = {
+    bgColor: "#ffffff",
+    rangeMode: false,
+    rect: null,         // {x, y, width, height} in backing-store px
+    inputImage: null,   // {dataUrl, width, height}
+    handLImage: null,   // {dataUrl, width, height} — set by left-hand drop UI
+    handRImage: null,   // same for the right hand
+  };
+  window.__sam3dPoseImageState = state;
+
+  // Hook the file-input handler so input_image always reflects the latest
+  // upload. We can't easily monkey-patch onFileChosen (declared with const
+  // in the closure above), but the file input fires a "change" event we can
+  // listen to in addition to the existing handler.
+  const fileInputEl = document.getElementById("file-input");
+  function readFileAsDataUrl(file) {
+    return new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(r.result);
+      r.onerror = () => reject(r.error || new Error("file read failed"));
+      r.readAsDataURL(file);
+    });
+  }
+  async function captureInputImage(file) {
+    if (!file) { state.inputImage = null; return; }
+    try {
+      const dataUrl = await readFileAsDataUrl(file);
+      // Decode dimensions for downstream ergonomics.
+      const dim = await new Promise((resolve) => {
+        const im = new Image();
+        im.onload = () => resolve({ w: im.naturalWidth, h: im.naturalHeight });
+        im.onerror = () => resolve({ w: 0, h: 0 });
+        im.src = dataUrl;
+      });
+      state.inputImage = { dataUrl, width: dim.w, height: dim.h };
+    } catch (e) {
+      console.warn("[SAM3D] input image capture failed:", e);
+      state.inputImage = null;
+    }
+  }
+  if (fileInputEl) {
+    fileInputEl.addEventListener("change", (e) => {
+      const f = e.target.files?.[0];
+      if (f) captureInputImage(f);
+    });
+  }
+  const fileDropEl = document.getElementById("file-drop");
+  if (fileDropEl) {
+    fileDropEl.addEventListener("drop", (e) => {
+      const f = e.dataTransfer?.files?.[0];
+      if (f) captureInputImage(f);
+    });
+  }
+
+  // ---- Hand image inputs (Left / Right) ---------------------------------
+  // Each hand has a drop area + 左右反転 button. The dataUrl stored here is
+  // POSTed alongside the main image to /sam3d/api/process so the server can
+  // run the hand decoder and override the body's hand pose. The same dataUrl
+  // is also returned in the confirm payload so the Pose Editor node can
+  // surface it as ``hand_l_image`` / ``hand_r_image`` IMAGE outputs.
+  function _decodeFileToImage(file) {
+    return new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => {
+        const url = r.result;
+        const im = new Image();
+        im.onload = () => resolve({ dataUrl: url, width: im.naturalWidth, height: im.naturalHeight });
+        im.onerror = () => reject(new Error("hand image decode failed"));
+        im.src = url;
+      };
+      r.onerror = () => reject(r.error || new Error("file read failed"));
+      r.readAsDataURL(file);
+    });
+  }
+
+  function _renderHandPreview(side, cap) {
+    const previewEl = document.getElementById(`${side}hand-preview`);
+    const labelEl = document.getElementById(`${side}hand-file-label`);
+    const flipBtn = document.getElementById(`${side}hand-flip-btn`);
+    if (cap) {
+      if (previewEl) {
+        previewEl.src = cap.dataUrl;
+        previewEl.hidden = false;
+      }
+      if (labelEl) labelEl.textContent = `${cap.width}×${cap.height}`;
+      if (flipBtn) flipBtn.disabled = false;
+    } else {
+      if (previewEl) {
+        previewEl.removeAttribute("src");
+        previewEl.hidden = true;
+      }
+      if (labelEl) {
+        const key = side === "l" ? "input.lhand_drop" : "input.rhand_drop";
+        labelEl.textContent =
+          window.i18n?.t(key) || (side === "l" ? "Left hand image" : "Right hand image");
+      }
+      if (flipBtn) flipBtn.disabled = true;
+    }
+  }
+
+  async function _handleHandFile(side, file) {
+    if (!file) return;
+    try {
+      const cap = await _decodeFileToImage(file);
+      if (side === "l") state.handLImage = cap; else state.handRImage = cap;
+      _renderHandPreview(side, cap);
+    } catch (exc) {
+      console.warn(`[SAM3D] ${side}hand load failed:`, exc);
+    }
+  }
+
+  // Mirror the loaded hand image in place. We re-decode through a canvas so
+  // the dataUrl actually contains pixel-flipped bytes — server-side hand
+  // inference doesn't see CSS transforms.
+  function _mirrorDataUrl(dataUrl) {
+    return new Promise((resolve, reject) => {
+      const im = new Image();
+      im.onload = () => {
+        const off = document.createElement("canvas");
+        off.width = im.naturalWidth;
+        off.height = im.naturalHeight;
+        const ctx = off.getContext("2d");
+        ctx.translate(off.width, 0);
+        ctx.scale(-1, 1);
+        ctx.drawImage(im, 0, 0);
+        resolve({
+          dataUrl: off.toDataURL("image/png"),
+          width: off.width,
+          height: off.height,
+        });
+      };
+      im.onerror = () => reject(new Error("mirror decode failed"));
+      im.src = dataUrl;
+    });
+  }
+
+  async function _flipHand(side) {
+    const cur = side === "l" ? state.handLImage : state.handRImage;
+    if (!cur) return;
+    try {
+      const flipped = await _mirrorDataUrl(cur.dataUrl);
+      if (side === "l") state.handLImage = flipped; else state.handRImage = flipped;
+      _renderHandPreview(side, flipped);
+    } catch (exc) {
+      console.warn(`[SAM3D] ${side}hand flip failed:`, exc);
+    }
+  }
+
+  for (const side of ["l", "r"]) {
+    const inputEl = document.getElementById(`${side}hand-file-input`);
+    const dropEl  = document.getElementById(`${side}hand-drop`);
+    const flipBtn = document.getElementById(`${side}hand-flip-btn`);
+    if (inputEl) {
+      inputEl.addEventListener("change", (e) => {
+        const f = e.target.files?.[0];
+        if (f) _handleHandFile(side, f);
+      });
+    }
+    if (dropEl) {
+      ["dragenter", "dragover"].forEach((ev) =>
+        dropEl.addEventListener(ev, (e) => {
+          e.preventDefault();
+          dropEl.classList.add("dragover");
+        }),
+      );
+      ["dragleave", "drop"].forEach((ev) =>
+        dropEl.addEventListener(ev, (e) => {
+          e.preventDefault();
+          dropEl.classList.remove("dragover");
+        }),
+      );
+      dropEl.addEventListener("drop", (e) => {
+        const f = e.dataTransfer?.files?.[0];
+        if (f) _handleHandFile(side, f);
+      });
+    }
+    if (flipBtn) {
+      flipBtn.addEventListener("click", () => _flipHand(side));
+    }
+  }
+
+  // Used by the run handler (multipart POST) and the confirm payload glue
+  // (postMessage to ComfyUI).
+  window.__sam3dGetHandImages = function () {
+    return { left: state.handLImage, right: state.handRImage };
+  };
+  // Convert a "data:image/...;base64,xxx" URL to a Blob so it can be
+  // appended to a FormData. Returns null when the dataUrl is missing /
+  // malformed so the caller can skip the field.
+  window.__sam3dDataUrlToBlob = function (dataUrl) {
+    if (!dataUrl || typeof dataUrl !== "string") return null;
+    const m = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+    if (!m) return null;
+    try {
+      const bytes = atob(m[2]);
+      const buf = new Uint8Array(bytes.length);
+      for (let i = 0; i < bytes.length; i++) buf[i] = bytes.charCodeAt(i);
+      return new Blob([buf], { type: m[1] });
+    } catch (_e) {
+      return null;
+    }
+  };
+
+  // ---- Background-color picker -------------------------------------------
+  const bgBtn = document.getElementById("bg-color-btn");
+  const bgInput = document.getElementById("bg-color-input");
+  const bgSwatch = document.getElementById("bg-color-swatch");
+  function setBgColor(hex) {
+    state.bgColor = hex;
+    if (bgSwatch) bgSwatch.style.background = hex;
+    if (bgInput && bgInput.value !== hex) bgInput.value = hex;
+  }
+  setBgColor(state.bgColor);
+  if (bgBtn && bgInput) {
+    bgBtn.addEventListener("click", (ev) => {
+      // Avoid recursive open when clicking the input itself bubbles up.
+      if (ev.target === bgInput) return;
+      bgInput.click();
+    });
+    bgInput.addEventListener("input", () => setBgColor(bgInput.value));
+    bgInput.addEventListener("change", () => setBgColor(bgInput.value));
+  }
+
+  // ---- Range-select overlay ---------------------------------------------
+  const rangeBtn = document.getElementById("range-select-btn");
+  const rangeResetBtn = document.getElementById("range-reset-btn");
+  const rangeOverlay = document.getElementById("range-overlay");
+  const rangeRect = document.getElementById("range-rect");
+  const viewportEl = document.getElementById("viewport");
+
+  function clientRectToBacking(rectClient) {
+    if (!viewer.getCanvasSize || !viewer.getCanvasClientSize) return null;
+    const back = viewer.getCanvasSize();
+    const front = viewer.getCanvasClientSize();
+    const sx = back.width  / Math.max(front.width,  1);
+    const sy = back.height / Math.max(front.height, 1);
+    return {
+      x: rectClient.x * sx,
+      y: rectClient.y * sy,
+      width: rectClient.width  * sx,
+      height: rectClient.height * sy,
+    };
+  }
+
+  function updateRangeButtonLabel() {
+    if (rangeBtn) {
+      const key = state.rangeMode ? "viewport.range_exit" : "viewport.range_enter";
+      rangeBtn.dataset.i18n = key;
+      rangeBtn.textContent = window.i18n?.t(key) ||
+        (state.rangeMode ? "画像範囲指定を終了" : "画像範囲");
+    }
+    if (rangeResetBtn) {
+      // Reset is dimmed when there's nothing saved to clear.
+      rangeResetBtn.disabled = !state.rect;
+    }
+  }
+
+  // Hide the red rect from the viewport WITHOUT touching ``state.rect``.
+  // Used when leaving range-select mode — the saved range stays in state
+  // so re-entering the mode can re-render it.
+  function hideRectVisual() {
+    if (rangeRect) rangeRect.hidden = true;
+  }
+
+  // Re-draw the saved client rect (if any) in the overlay. Called when
+  // entering range-select mode so the user sees what they previously
+  // confirmed instead of an empty viewport.
+  function redrawSavedRect() {
+    if (!rangeRect) return;
+    if (!state.rectClient) {
+      rangeRect.hidden = true;
+      return;
+    }
+    const c = state.rectClient;
+    rangeRect.hidden = false;
+    rangeRect.style.left   = `${c.x}px`;
+    rangeRect.style.top    = `${c.y}px`;
+    rangeRect.style.width  = `${c.width}px`;
+    rangeRect.style.height = `${c.height}px`;
+  }
+
+  function setRangeMode(on) {
+    state.rangeMode = !!on;
+    document.body.classList.toggle("range-select-mode", state.rangeMode);
+    if (state.rangeMode) {
+      // Re-show the previously saved rect (if any).
+      redrawSavedRect();
+    } else {
+      // Leave the saved rect intact; just hide the overlay.
+      hideRectVisual();
+    }
+    updateRangeButtonLabel();
+  }
+
+  function showRect(client) {
+    if (!rangeRect || !viewportEl) return;
+    const vp = viewportEl.getBoundingClientRect();
+    rangeRect.hidden = false;
+    rangeRect.style.left   = `${client.x}px`;
+    rangeRect.style.top    = `${client.y}px`;
+    rangeRect.style.width  = `${client.width}px`;
+    rangeRect.style.height = `${client.height}px`;
+    // Also stash the BACKING-store rect for capture time.
+    state.rect = clientRectToBacking(client);
+    state.rectClient = { ...client };
+    if (rangeResetBtn) rangeResetBtn.disabled = !state.rect;
+    void vp;  // (vp unused — kept for reference; client coords are overlay-relative)
+  }
+
+  // Drag-to-define logic. Pointer events fire only when body has the
+  // ``range-select-mode`` class (CSS toggles overlay pointer-events).
+  let dragging = false;
+  let startX = 0, startY = 0;
+  if (rangeOverlay) {
+    rangeOverlay.addEventListener("pointerdown", (ev) => {
+      if (!state.rangeMode) return;
+      const r = rangeOverlay.getBoundingClientRect();
+      startX = ev.clientX - r.left;
+      startY = ev.clientY - r.top;
+      dragging = true;
+      try { rangeOverlay.setPointerCapture(ev.pointerId); } catch (_e) {}
+      showRect({ x: startX, y: startY, width: 1, height: 1 });
+      ev.preventDefault();
+    });
+    rangeOverlay.addEventListener("pointermove", (ev) => {
+      if (!dragging) return;
+      const r = rangeOverlay.getBoundingClientRect();
+      const cx = Math.max(0, Math.min(r.width,  ev.clientX - r.left));
+      const cy = Math.max(0, Math.min(r.height, ev.clientY - r.top));
+      const x = Math.min(startX, cx);
+      const y = Math.min(startY, cy);
+      const w = Math.abs(cx - startX);
+      const h = Math.abs(cy - startY);
+      showRect({ x, y, width: w, height: h });
+    });
+    const endDrag = (ev) => {
+      if (!dragging) return;
+      dragging = false;
+      try { rangeOverlay.releasePointerCapture(ev.pointerId); } catch (_e) {}
+      // Drop ranges below a few pixels — likely an accidental tap.
+      if (state.rect && (state.rect.width < 4 || state.rect.height < 4)) {
+        state.rect = null;
+        state.rectClient = null;
+        if (rangeRect) rangeRect.hidden = true;
+      }
+    };
+    rangeOverlay.addEventListener("pointerup", endDrag);
+    rangeOverlay.addEventListener("pointercancel", endDrag);
+  }
+
+  if (rangeBtn) {
+    rangeBtn.addEventListener("click", () => setRangeMode(!state.rangeMode));
+    updateRangeButtonLabel();
+    document.addEventListener("body3d:langchange", updateRangeButtonLabel);
+  }
+
+  if (rangeResetBtn) {
+    rangeResetBtn.addEventListener("click", () => {
+      // Drop the saved rect AND the on-screen indicator so the next
+      // confirm captures the full viewport again.
+      state.rect = null;
+      state.rectClient = null;
+      hideRectVisual();
+      updateRangeButtonLabel();
+    });
+    rangeResetBtn.disabled = true;
+  }
+
+  // Public capture entry-point used by the confirm-and-close payload glue.
+  window.__sam3dCapturePoseImage = function () {
+    if (!viewer || !viewer.captureImage) return null;
+    if (!renderAvailable) return null;
+    const bg = state.bgColor || "#ffffff";
+    const cropRect = state.rect || null;
+    const cap = viewer.captureImage({
+      bgColor: new THREE.Color(bg).getHex(),
+      cropRect,
+      framing: "current",
+    });
+    return cap;
+  };
+  window.__sam3dGetInputImage = function () {
+    return state.inputImage;
+  };
+  window.__sam3dCaptureCharaImage = function () {
+    if (!viewer || !viewer.captureImage) return null;
+    const cap = viewer.captureImage({
+      bgColor: 0xffffff,
+      cropRect: null,
+      framing: "fit_full_body",
+    });
+    return cap;
+  };
+})();

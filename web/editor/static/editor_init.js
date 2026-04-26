@@ -219,6 +219,45 @@
       node_id: NODE_ID,
       [PAYLOAD_KEY_BY_MODE[MODE]]: json,
     };
+    // Attach captured images. captureImage helpers return
+    // {dataUrl, width, height} or null. Sent verbatim — the widget
+    // mirrors them into hidden node widgets so the Python node can
+    // surface them as IMAGE outputs.
+    if (MODE === "pose") {
+      try {
+        const poseCap = window.__sam3dCapturePoseImage?.();
+        if (poseCap?.dataUrl) {
+          msg.pose_image = poseCap.dataUrl;
+          msg.pose_image_size = { width: poseCap.width, height: poseCap.height };
+        }
+      } catch (e) { console.warn("pose_image capture failed:", e); }
+      try {
+        const inp = window.__sam3dGetInputImage?.();
+        if (inp?.dataUrl) {
+          msg.input_image = inp.dataUrl;
+          msg.input_image_size = { width: inp.width, height: inp.height };
+        }
+      } catch (e) { console.warn("input_image capture failed:", e); }
+      try {
+        const hands = window.__sam3dGetHandImages?.() || {};
+        if (hands.left?.dataUrl) {
+          msg.hand_l_image = hands.left.dataUrl;
+          msg.hand_l_image_size = { width: hands.left.width, height: hands.left.height };
+        }
+        if (hands.right?.dataUrl) {
+          msg.hand_r_image = hands.right.dataUrl;
+          msg.hand_r_image_size = { width: hands.right.width, height: hands.right.height };
+        }
+      } catch (e) { console.warn("hand_image capture failed:", e); }
+    } else if (MODE === "character") {
+      try {
+        const cap = window.__sam3dCaptureCharaImage?.();
+        if (cap?.dataUrl) {
+          msg.chara_image = cap.dataUrl;
+          msg.chara_image_size = { width: cap.width, height: cap.height };
+        }
+      } catch (e) { console.warn("chara_image capture failed:", e); }
+    }
     const target = resolveTargetWindow();
     if (!target) {
       try { navigator.clipboard.writeText(json); } catch (_e) {}

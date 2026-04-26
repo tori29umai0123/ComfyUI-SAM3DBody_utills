@@ -103,13 +103,18 @@ async def api_process(request: web.Request) -> web.Response:
     inference_type = request.query.get("inference_type", "full")
     reader = await request.multipart()
     raw: bytes | None = None
+    raw_lhand: bytes | None = None
+    raw_rhand: bytes | None = None
     while True:
         field = await reader.next()
         if field is None:
             break
         if field.name == "image":
             raw = await field.read(decode=False)
-            break
+        elif field.name == "left_hand_image":
+            raw_lhand = await field.read(decode=False)
+        elif field.name == "right_hand_image":
+            raw_rhand = await field.read(decode=False)
     if not raw:
         return web.json_response({"error": "missing 'image' multipart field"}, status=400)
 
@@ -119,6 +124,20 @@ async def api_process(request: web.Request) -> web.Response:
         pil = _normalize_input_image(pil)
     except Exception as exc:  # noqa: BLE001
         return web.json_response({"error": f"could not decode image: {exc}"}, status=400)
+
+    def _decode_optional(b: bytes | None) -> Image.Image | None:
+        if not b:
+            return None
+        try:
+            im = Image.open(io.BytesIO(b))
+            im.load()
+            return _normalize_input_image(im)
+        except Exception as exc:  # noqa: BLE001
+            log.warning("hand image decode failed: %s", exc)
+            return None
+
+    pil_lhand = _decode_optional(raw_lhand)
+    pil_rhand = _decode_optional(raw_rhand)
 
     try:
         result = await asyncio.to_thread(
@@ -131,6 +150,8 @@ async def api_process(request: web.Request) -> web.Response:
             min_width_pixels=0,
             min_height_pixels=0,
             device_mode=None,
+            left_hand_image=pil_lhand,
+            right_hand_image=pil_rhand,
         )
     except Exception as exc:  # noqa: BLE001
         log.exception("pipeline failed")

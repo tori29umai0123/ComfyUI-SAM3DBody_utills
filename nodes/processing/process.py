@@ -1067,6 +1067,81 @@ def _to_serializable(value):
     return value
 
 
+def _hand_image_to_rgb_uint8(image):
+    """Convert a ComfyUI IMAGE tensor (B, H, W, C) into a contiguous
+    HxWx3 uint8 RGB array — the format the hand decoder helper expects.
+    Returns ``None`` if ``image`` is None / empty / 1×1 placeholder.
+    """
+    if image is None:
+        return None
+    try:
+        arr = image[0].detach().cpu().numpy() if isinstance(image, torch.Tensor) else np.asarray(image[0])
+    except Exception:
+        return None
+    if arr.ndim != 3 or arr.shape[-1] not in (3, 4) or arr.shape[0] < 4 or arr.shape[1] < 4:
+        # 1×1 placeholders coming from "no image connected" upstream nodes
+        # would produce garbage hand poses — treat them as missing.
+        return None
+    if arr.shape[-1] == 4:
+        arr = arr[..., :3]
+    arr = np.clip(arr * 255.0, 0, 255).astype(np.uint8)
+    return np.ascontiguousarray(arr)
+
+
+def _run_hand_only_inference(estimator, hand_rgb_uint8, *, is_left):
+    """Run the SAM3D Body hand decoder on a cropped hand image and return a
+    54-dim hand pose params vector (np.float32).
+
+    The hand decoder is symmetric: it always returns a (B, 108) tensor
+    representing both hands (``[:, :54]`` left, ``[:, 54:]`` right). The
+    full pipeline at ``sam3d_body.py:1238-1272`` handles a left hand by
+    horizontally flipping the image, running the decoder, and reading the
+    [:, 54:] (right) slot — which now corresponds to the original left
+    hand. We replicate that here.
+    """
+    from ..sam_3d_body.data.utils.prepare_batch import prepare_batch
+    from ..sam_3d_body.utils import recursive_to
+
+    img = hand_rgb_uint8
+    if is_left:
+        img = np.ascontiguousarray(img[:, ::-1])
+    h, w = img.shape[:2]
+    bbox = np.array([[0, 0, w, h]], dtype=np.float32)
+    with torch.no_grad():
+        batch = prepare_batch(img, estimator.transform_hand, bbox)
+        batch = recursive_to(batch, estimator.device)
+        estimator.model._initialize_batch(batch)
+        pose_output = estimator.model.forward_step(batch, decoder_type="hand")
+    hand_params = pose_output["mhr_hand"]["hand"]  # (B, 108)
+    return hand_params[0, 54:].detach().cpu().numpy().astype(np.float32)
+
+
+def _override_hand_in_raw_output(raw_output, *, lhand_params=None, rhand_params=None):
+    """Splice user-provided hand params into a raw_output dict's
+    ``hand_pose_params`` (shape (108,)). Mutates the dict in place. The
+    body's ``body_pose_params`` is left as-is — only hand fingers change.
+    """
+    if lhand_params is None and rhand_params is None:
+        return
+    hp = raw_output.get("hand_pose_params")
+    if hp is None:
+        # The decoder didn't produce a hand vector to overwrite. Build one
+        # from scratch so the override still takes effect.
+        hp = np.zeros((108,), dtype=np.float32)
+    else:
+        hp = np.asarray(hp, dtype=np.float32).reshape(-1).copy()
+        if hp.size != 108:
+            # Unexpected size; pad/truncate to 108 to keep the JSON valid.
+            fixed = np.zeros((108,), dtype=np.float32)
+            fixed[: min(108, hp.size)] = hp[: min(108, hp.size)]
+            hp = fixed
+    if lhand_params is not None:
+        hp[:54] = np.asarray(lhand_params, dtype=np.float32).reshape(-1)[:54]
+    if rhand_params is not None:
+        hp[54:] = np.asarray(rhand_params, dtype=np.float32).reshape(-1)[:54]
+    raw_output["hand_pose_params"] = hp
+
+
 def _extract_pose_json(mesh_data, image):
     raw_output = mesh_data.get("raw_output", {}) if isinstance(mesh_data, dict) else {}
     img_h = int(image.shape[1]) if hasattr(image, "shape") and len(image.shape) > 1 else 0
@@ -1197,6 +1272,20 @@ class SAM3DBodyProcessToJson:
                 "mask": ("MASK", {
                     "tooltip": "Optional segmentation mask to guide reconstruction",
                 }),
+                "Left_hand_image": ("IMAGE", {
+                    "tooltip": (
+                        "Optional cropped image of the LEFT hand. When provided,"
+                        " the hand decoder is run on it and the result overrides"
+                        " the body's left-hand pose params."
+                    ),
+                }),
+                "Right_hand_image": ("IMAGE", {
+                    "tooltip": (
+                        "Optional cropped image of the RIGHT hand. When provided,"
+                        " the hand decoder is run on it and the result overrides"
+                        " the body's right-hand pose params."
+                    ),
+                }),
             },
         }
 
@@ -1216,7 +1305,8 @@ class SAM3DBodyProcessToJson:
         return np.array([[cmin, rmin, cmax, rmax]], dtype=np.float32)
 
     def process_to_json(self, model, image, bbox_threshold=0.8,
-                        inference_type="full", mask=None):
+                        inference_type="full", mask=None,
+                        Left_hand_image=None, Right_hand_image=None):
         from ..sam_3d_body import SAM3DBodyEstimator
 
         loaded = _load_sam3d_model(model)
@@ -1257,6 +1347,29 @@ class SAM3DBodyProcessToJson:
 
         if not outputs:
             raise RuntimeError("No people detected in image")
+
+        # Optional hand overrides — run the hand-only decoder on each
+        # provided image and splice the 54-dim result into hand_pose_params.
+        # Left hand goes into [:54], right hand into [54:]. The body's
+        # ``body_pose_params`` (which carries the wrist orientation) is
+        # left untouched: overriding only the fingers keeps the arm
+        # connected to whatever pose the body decoder already produced.
+        lhand_rgb = _hand_image_to_rgb_uint8(Left_hand_image)
+        rhand_rgb = _hand_image_to_rgb_uint8(Right_hand_image)
+        lhand_params = (
+            _run_hand_only_inference(estimator, lhand_rgb, is_left=True)
+            if lhand_rgb is not None else None
+        )
+        rhand_params = (
+            _run_hand_only_inference(estimator, rhand_rgb, is_left=False)
+            if rhand_rgb is not None else None
+        )
+        if lhand_params is not None or rhand_params is not None:
+            _override_hand_in_raw_output(
+                outputs[0],
+                lhand_params=lhand_params,
+                rhand_params=rhand_params,
+            )
 
         mesh_data = {"raw_output": outputs[0]}
         pose_json = _extract_pose_json(mesh_data, image)

@@ -15,25 +15,38 @@ const TARGET_NODE = "SAM3DBodyPoseEditor";
 const CONFIRM_MSG = "sam3d-pose-confirmed";
 const CANCEL_MSG  = "sam3d-pose-cancelled";
 const HIDDEN_NAME = "pose_json";
+const HIDDEN_POSE_IMG  = "pose_image";
+const HIDDEN_INPUT_IMG = "input_image";
+const HIDDEN_LHAND_IMG = "hand_l_image";
+const HIDDEN_RHAND_IMG = "hand_r_image";
 const STATUS_NAME = "status";
 const EDITOR_PATH = "/sam3d/editor/pose";
 const MODAL_ID    = "sam3d-pose-editor-modal";
+
+function _ensureHidden(node, name) {
+    let w = node.widgets?.find((x) => x.name === name);
+    if (!w) {
+        w = node.addWidget("text", name, "", () => {}, {
+            multiline: false,
+            serialize: true,
+        });
+    }
+    w.serialize = true;
+    w.computeSize = () => [0, -4];
+    w.draw = () => {};
+    w.type = "hidden";
+    return w;
+}
 
 function attachWidgets(node) {
     if (node.__sam3dPoseEditorAttached) return;
     node.__sam3dPoseEditorAttached = true;
 
-    let hiddenWidget = node.widgets?.find((w) => w.name === HIDDEN_NAME);
-    if (!hiddenWidget) {
-        hiddenWidget = node.addWidget("text", HIDDEN_NAME, "", () => {}, {
-            multiline: false,
-            serialize: true,
-        });
-    }
-    hiddenWidget.serialize = true;
-    hiddenWidget.computeSize = () => [0, -4];
-    hiddenWidget.draw = () => {};
-    hiddenWidget.type = "hidden";
+    const hiddenWidget    = _ensureHidden(node, HIDDEN_NAME);
+    const hiddenPoseImg   = _ensureHidden(node, HIDDEN_POSE_IMG);
+    const hiddenInputImg  = _ensureHidden(node, HIDDEN_INPUT_IMG);
+    const hiddenLHandImg  = _ensureHidden(node, HIDDEN_LHAND_IMG);
+    const hiddenRHandImg  = _ensureHidden(node, HIDDEN_RHAND_IMG);
 
     const statusWidget = node.addWidget(
         "text",
@@ -50,14 +63,22 @@ function attachWidgets(node) {
 
     const refresh = () => {
         const v = hiddenWidget.value || "";
+        const imgFlag = hiddenPoseImg.value ? " +img" : "";
+        const inFlag  = hiddenInputImg.value ? " +in" : "";
+        const hlFlag  = hiddenLHandImg.value ? " +hl" : "";
+        const hrFlag  = hiddenRHandImg.value ? " +hr" : "";
         statusWidget.value = v
-            ? `confirmed (${v.length} chars)`
+            ? `confirmed (${v.length} chars)${imgFlag}${inFlag}${hlFlag}${hrFlag}`
             : "(未確定 / unset)";
         node.setDirtyCanvas?.(true, true);
     };
     refresh();
-    node.__sam3dPoseRefresh = refresh;
-    node.__sam3dPoseHidden = hiddenWidget;
+    node.__sam3dPoseRefresh    = refresh;
+    node.__sam3dPoseHidden     = hiddenWidget;
+    node.__sam3dPoseImgHidden  = hiddenPoseImg;
+    node.__sam3dPoseInHidden   = hiddenInputImg;
+    node.__sam3dPoseLHandHidden = hiddenLHandImg;
+    node.__sam3dPoseRHandHidden = hiddenRHandImg;
 
     const origConfig = node.onConfigure;
     node.onConfigure = function (info) {
@@ -110,7 +131,10 @@ function closeModal() {
 function openEditor(node) {
     ensureModalStyles();
     closeModal();  // belt-and-suspenders if a previous modal got stuck
-    const url = `${EDITOR_PATH}?node_id=${encodeURIComponent(node.id)}&embed=1`;
+    // ``_t`` is a per-open cache-buster so a stale browser cache from the
+    // pre-image-output version of the editor can't keep serving the old
+    // PNG-save UI after this widget is updated.
+    const url = `${EDITOR_PATH}?node_id=${encodeURIComponent(node.id)}&embed=1&_t=${Date.now()}`;
     const backdrop = document.createElement("div");
     backdrop.className = "sam3d-modal-backdrop";
     backdrop.id = MODAL_ID;
@@ -137,11 +161,31 @@ window.addEventListener("message", (evt) => {
         return;
     }
     if (evt.data.type !== CONFIRM_MSG) return;
-    const { node_id, pose_json } = evt.data;
+    const { node_id, pose_json, pose_image, input_image,
+            hand_l_image, hand_r_image } = evt.data;
     if (typeof pose_json !== "string") return;
     const target = app.graph?.getNodeById?.(Number(node_id));
     if (target && target.comfyClass === TARGET_NODE && target.__sam3dPoseHidden) {
         target.__sam3dPoseHidden.value = pose_json;
+        // Image widgets are optional — clear them when the editor didn't
+        // ship one so a stale capture from a previous confirm doesn't get
+        // re-served on the next workflow run.
+        if (target.__sam3dPoseImgHidden) {
+            target.__sam3dPoseImgHidden.value =
+                typeof pose_image === "string" ? pose_image : "";
+        }
+        if (target.__sam3dPoseInHidden) {
+            target.__sam3dPoseInHidden.value =
+                typeof input_image === "string" ? input_image : "";
+        }
+        if (target.__sam3dPoseLHandHidden) {
+            target.__sam3dPoseLHandHidden.value =
+                typeof hand_l_image === "string" ? hand_l_image : "";
+        }
+        if (target.__sam3dPoseRHandHidden) {
+            target.__sam3dPoseRHandHidden.value =
+                typeof hand_r_image === "string" ? hand_r_image : "";
+        }
         target.__sam3dPoseRefresh?.();
     }
     closeModal();

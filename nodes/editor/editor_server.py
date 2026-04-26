@@ -65,7 +65,19 @@ def _serve_html(name: str) -> web.Response:
                 f"(This is normal if the frontend hasn't been installed yet.)"
             ),
         )
-    return web.FileResponse(path)
+    # Force fresh fetch on every open so the iframe always picks up the
+    # latest ``?v=N`` query strings on its <script>/<link> tags. Without
+    # this, browsers cache the HTML and keep serving stale references to
+    # older JS/CSS bundles — visible to users as "the new buttons aren't
+    # showing up after the update".
+    return web.FileResponse(
+        path,
+        headers={
+            "Cache-Control": "no-store, no-cache, must-revalidate",
+            "Pragma": "no-cache",
+            "Expires": "0",
+        },
+    )
 
 
 @routes.get("/sam3d/editor/pose")

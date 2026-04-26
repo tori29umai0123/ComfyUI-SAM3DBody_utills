@@ -12,6 +12,11 @@ from PIL import Image
 
 from . import paths as _paths
 from . import pose_session
+from .hand_inference import (
+    hand_rgb_to_uint8,
+    run_hand_only_inference,
+    splice_hand_into_params,
+)
 from .renderer import render_from_session
 from .segmentation import extract_best_mask
 from .sam3dbody_loader import load_bundle
@@ -94,6 +99,8 @@ def run_image_to_obj(
     min_width_pixels: int = 0,
     min_height_pixels: int = 0,
     device_mode: str | None = None,
+    left_hand_image: Image.Image | None = None,
+    right_hand_image: Image.Image | None = None,
 ) -> PipelineResult:
     """Run segmentation + pose estimation on a single image and produce an OBJ.
 
@@ -142,6 +149,30 @@ def run_image_to_obj(
         mask_path = _paths.tmp_dir() / "mask.png"
         _save_mask_png(masks[0, :, :, 0], mask_path)
         mask_url = _mask_url()
+
+    # ----- Optional hand overrides ---------------------------------------
+    # When the user uploaded a left / right hand image alongside the
+    # main image, run the hand-only decoder on each crop and splice the
+    # 54-dim result into hand_pose_params before serialising. The body's
+    # body_pose_params (which carries the wrist orientation) is left
+    # alone — only finger curl / spread comes from the hand override.
+    lhand_arr = hand_rgb_to_uint8(left_hand_image)
+    rhand_arr = hand_rgb_to_uint8(right_hand_image)
+    lhand_params = (
+        run_hand_only_inference(bundle.estimator, lhand_arr, is_left=True)
+        if lhand_arr is not None else None
+    )
+    rhand_params = (
+        run_hand_only_inference(bundle.estimator, rhand_arr, is_left=False)
+        if rhand_arr is not None else None
+    )
+    if lhand_params is not None or rhand_params is not None:
+        spliced = splice_hand_into_params(
+            best.get("hand_pose_params"),
+            lhand_params=lhand_params,
+            rhand_params=rhand_params,
+        )
+        best["hand_pose_params"] = spliced
 
     pose_json: dict[str, Any] = {
         "bbox": _numpy_clean(best.get("bbox")),
