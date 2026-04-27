@@ -1,0 +1,13 @@
+# ComfyUI-SAM3DBody_utills aarch64 + CUDA 13.0 wheels
+# Built on: 2026-04-27 01:13:23 UTC
+# Host: Linux thinkstationpgx-1a4a 6.14.0-1013-nvidia #13-Ubuntu SMP PREEMPT_DYNAMIC Wed Oct 29 06:01:19 UTC 2025 aarch64 aarch64 aarch64 GNU/Linux
+# CUDA: Build cuda_13.0.r13.0/compiler.36424714_0
+# Python: Python 3.11.9
+# torch: 2.9.1+cu130
+# GPU: NVIDIA GB10 (capability (12, 1))
+# TORCH_CUDA_ARCH_LIST used during build: 12.0+PTX (SM_120 binary + PTX, JIT to SM_121 on GB10)
+
+detectron2-0.6+cu130torch2.9-cp311-cp311-linux_aarch64.whl  sha256=06502dd10821fcbf99a5cef13a05261d6f3f2084418fdc04874c4d26957882c1  size=6852174
+torch_cluster-1.6.3+cu130torch2.9-cp311-cp311-linux_aarch64.whl  sha256=f6c3dc0f7c6ed0db3f2ce5c4259b84eaf5e86e885b2e4a669448f540128d8b63  size=2136951
+torch_scatter-2.1.2+cu130torch2.9-cp311-cp311-linux_aarch64.whl  sha256=a71ab67a59d3829b7dc3bee1a1169a4933e30c265b732177b60974cd455a2b83  size=2826341
+torch_sparse-0.6.18+cu130torch2.9-cp311-cp311-linux_aarch64.whl  sha256=9da5c3e1618c2e88aceed9bba4882c7e1c64d94a5dc1c77e147b91cac24d3d37  size=2988825

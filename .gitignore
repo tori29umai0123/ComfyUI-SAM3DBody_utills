@@ -18,6 +18,9 @@ parts/
 sdist/
 var/
 wheels/
+# Top-level wheels/ ships prebuilt aarch64 + cu130 wheels for DGX Spark / GH200.
+!/wheels/
+!/wheels/**
 *.egg-info/
 .installed.cfg
 *.egg
