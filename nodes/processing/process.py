@@ -44,16 +44,16 @@ _MODEL_CACHE = {}
 # face, neck, limbs, whole body — is handled the same way.
 
 
-def _character_presets_dir():
-    """Resolves to `presets/<active pack>/chara_settings_presets/` —
+def _body_preset_dir():
+    """Resolves to `presets/<active pack>/body_preset_settings/` —
     controlled by config.ini at the repo root."""
-    from ..preset_pack import chara_settings_dir
-    return str(chara_settings_dir())
+    from ..preset_pack import body_preset_settings_dir
+    return str(body_preset_settings_dir())
 
 
-def _discover_character_presets():
+def _discover_body_presets():
     """Return the preset dropdown options. One entry per JSON file in
-    chara_settings_presets/. `autosave` (written at the end of every
+    body_preset_settings/. `autosave` (written at the end of every
     render) is included as a first-class preset and pinned to the top
     so it acts as the default selection. Picking a preset triggers the
     frontend extension to copy its body/bone/blendshape values into the
@@ -61,7 +61,7 @@ def _discover_character_presets():
     side does NOT re-apply the preset at render time, so manual
     adjustments made after selection are respected."""
     options = []
-    d = _character_presets_dir()
+    d = _body_preset_dir()
     if os.path.isdir(d):
         for fn in sorted(os.listdir(d)):
             if fn.endswith(".json"):
@@ -77,11 +77,11 @@ def _discover_character_presets():
 
 
 def _autosave_path():
-    return os.path.join(_character_presets_dir(), "autosave.json")
+    return os.path.join(_body_preset_dir(), "autosave.json")
 
 
 def _load_autosave() -> dict:
-    """Read chara_settings_presets/autosave.json, which holds the last
+    """Read body_preset_settings/autosave.json, which holds the last
     render's body/bone/blendshape values. Used as UI slider defaults
     on ComfyUI start / refresh so the last settings persist across
     sessions. Returns {} if the file is missing or unreadable."""
@@ -108,14 +108,14 @@ def _save_autosave(settings: dict) -> None:
         print(f"[SAM3DBody] autosave write failed: {exc}")
 
 
-def _load_character_preset(name: str) -> dict:
-    """Load a character preset JSON. Returns an empty dict if the preset
+def _load_body_preset(name: str) -> dict:
+    """Load a body preset JSON. Returns an empty dict if the preset
     is 'none' / missing / malformed so the caller can skip the override."""
     if not name or name == "none":
         return {}
-    path = os.path.join(_character_presets_dir(), f"{name}.json")
+    path = os.path.join(_body_preset_dir(), f"{name}.json")
     if not os.path.exists(path):
-        print(f"[SAM3DBody] character preset not found: {path}")
+        print(f"[SAM3DBody] body preset not found: {path}")
         return {}
     try:
         with open(path, "r", encoding="utf-8") as f:
@@ -499,7 +499,7 @@ def _get_mhr_rest_verts(mhr_head, device):
         _FACE_BS_CACHE["rest_offset_len"] = None
         _FACE_BS_CACHE["normalize_mask"] = None
     # Joint parent hierarchy for bone-length scaling. MHR stores it as a
-    # flat tensor in `character_torch.skeleton.joint_parents` on every
+    # flat tensor in MHR's `skeleton.joint_parents` on every
     # mhr_head.mhr buffer.
     parents = None
     try:
@@ -821,7 +821,7 @@ def _compute_bone_chain_categories(parents: np.ndarray) -> np.ndarray:
 # (joint rest positions) is scaled by the full category value, but the
 # mesh around each joint only scales by this fraction of the same
 # ratio. 0.5 means: if the torso bone shortens by 40%, the torso mesh
-# only shrinks by 20% in girth — keeps the character from turning into
+# only shrinks by 20% in girth — keeps the body from turning into
 # a stick figure while still giving a genuine length change. Raise
 # toward 1.0 for more aggressive body shrink, lower for less.
 _MESH_SCALE_STRENGTH = 0.5
@@ -1376,24 +1376,24 @@ class SAM3DBodyProcessToJson:
         return (pose_json,)
 
 
-class SAM3DBodySettingCharaJson:
-    """Character-shape editor → outputs a chara_json string only.
+class SAM3DBodySettingBodyPresetJson:
+    """Body Preset editor → outputs a body_preset_json string only.
 
     Split out from the legacy ``SAM3DBodyRenderFromJson`` so the body /
     bone / blendshape state can be authored once and reused by multiple
     renders (and by other consumers — exporter nodes, the Pose Editor's
-    chara_json input, etc.). Pair with
-    ``SAM3DBodyRenderFromPoseAndCharaJson`` to render a frame.
+    body_preset_json input, etc.). Pair with
+    ``SAM3DBodyRenderFromPoseAndBodyPresetJson`` to render a frame.
 
-    The output JSON layout matches ``chara_settings_presets/*.json`` so
+    The output JSON layout matches ``body_preset_settings/*.json`` so
     it's drop-in interchangeable with the saved presets and with the
-    standalone Character Editor's confirmed payload.
+    standalone Body Preset Editor's confirmed payload.
     """
 
     @classmethod
     def INPUT_TYPES(cls):
         # Per-slider default values are taken from
-        # chara_settings_presets/autosave.json (written at the end of
+        # body_preset_settings/autosave.json (written at the end of
         # every successful build) so the last setting persists across
         # ComfyUI restarts.
         autosave = _load_autosave()
@@ -1414,7 +1414,7 @@ class SAM3DBodySettingCharaJson:
                     "min": 0.0, "max": 1.0, "step": 0.01}
 
         required = {
-            "preset":       (_discover_character_presets(),
+            "preset":       (_discover_body_presets(),
                              {"default": "autosave"}),
             # Body (MHR 45-dim PCA, first 9 axes)
             "body_fat":              ("FLOAT", _body("fat")),
@@ -1438,7 +1438,7 @@ class SAM3DBodySettingCharaJson:
         return {"required": required}
 
     RETURN_TYPES = ("STRING",)
-    RETURN_NAMES = ("chara_json",)
+    RETURN_NAMES = ("body_preset_json",)
     FUNCTION = "build"
     CATEGORY = "SAM3DBody/render"
 
@@ -1483,14 +1483,14 @@ class SAM3DBodySettingCharaJson:
         return (json.dumps(settings, ensure_ascii=False, indent=2),)
 
 
-class SAM3DBodyRenderFromPoseAndCharaJson:
-    """Render a posed character to an image. Pose data comes from
+class SAM3DBodyRenderFromPoseAndBodyPresetJson:
+    """Render a posed body to an image. Pose data comes from
     ``pose_json`` (Process Image to Pose JSON / Pose Editor), body shape
-    comes from ``chara_json`` (Setting Chara JSON / Character Editor).
+    comes from ``body_preset_json`` (Setting Body Preset JSON / Body Preset Editor).
 
     The remaining widgets are per-shot controls only — camera offsets,
     orbit, framing, and the lean-correction strength — none of which
-    belong inside chara_json.
+    belong inside body_preset_json.
     """
 
     @classmethod
@@ -1499,7 +1499,7 @@ class SAM3DBodyRenderFromPoseAndCharaJson:
             "required": {
                 "model":        ("SAM3D_MODEL",),
                 "pose_json":    ("STRING", {"default": "{}"}),
-                "chara_json":   ("STRING", {"default": "{}"}),
+                "body_preset_json":   ("STRING", {"default": "{}"}),
                 # Camera (per-shot controls)
                 "offset_x":     ("FLOAT", {"default": 0.0, "min": -5.0, "max": 5.0, "step": 0.01}),
                 "offset_y":     ("FLOAT", {"default": 0.0, "min": -5.0, "max": 5.0, "step": 0.01}),
@@ -1521,23 +1521,23 @@ class SAM3DBodyRenderFromPoseAndCharaJson:
     FUNCTION = "render"
     CATEGORY = "SAM3DBody/render"
 
-    def render(self, model, pose_json, chara_json,
+    def render(self, model, pose_json, body_preset_json,
                offset_x=0.0, offset_y=0.0, scale_offset=1.0,
                camera_yaw_deg=0.0, camera_pitch_deg=0.0,
                width=1024, height=1024, pose_adjust=0.0,
                background_image=None):
-        # Parse chara_json. Missing / malformed → MHR neutral body
+        # Parse body_preset_json. Missing / malformed → MHR neutral body
         # (all defaults), so an empty input still produces a sensible
         # render rather than crashing.
         try:
-            chara = json.loads(chara_json) if chara_json and chara_json.strip() else {}
+            body_preset = json.loads(body_preset_json) if body_preset_json and body_preset_json.strip() else {}
         except Exception as exc:
-            print(f"[SAM3DBody] chara_json parse failed: {exc}; using empty preset")
-            chara = {}
-        body_params  = chara.get("body_params")  or {}
-        bone_lengths = chara.get("bone_lengths") or {}
+            print(f"[SAM3DBody] body_preset_json parse failed: {exc}; using empty preset")
+            body_preset = {}
+        body_params  = body_preset.get("body_params")  or {}
+        bone_lengths = body_preset.get("bone_lengths") or {}
         blendshape_sliders = {
-            str(k): float(v) for k, v in (chara.get("blendshapes") or {}).items()
+            str(k): float(v) for k, v in (body_preset.get("blendshapes") or {}).items()
         }
 
         body_fat              = float(body_params.get("fat", 0.0))
@@ -1555,9 +1555,9 @@ class SAM3DBodyRenderFromPoseAndCharaJson:
         bone_arm   = float(bone_lengths.get("arm",   1.0))
         bone_leg   = float(bone_lengths.get("leg",   1.0))
 
-        # settings_json is the chara_json equivalent for the current
+        # settings_json is the body_preset_json equivalent for the current
         # render — handy as a debug echo / for downstream nodes that
-        # want the canonicalised character description.
+        # want the canonicalised body description.
         settings = {
             "body_params": {
                 "fat":            body_fat,
@@ -1612,7 +1612,7 @@ class SAM3DBodyRenderFromPoseAndCharaJson:
         #   45-dim PCA shape basis (shape_params[0..8]). Remaining components
         #   stay at 0. scale_params is held at 0 (MHR default skeleton scale).
         #
-        # The character's predicted shape from pose_json is intentionally
+        # The body's predicted shape from pose_json is intentionally
         # ignored so that, with all sliders at 0, the output is MHR's neutral
         # body regardless of the input image.
         #
@@ -1700,7 +1700,7 @@ class SAM3DBodyRenderFromPoseAndCharaJson:
         # Normalize each bone's vertex cloud back to its rest size. MHR
         # pose correctives (and any non-rotation content in body_pose_params)
         # otherwise stretch the head / torso / limbs based on the input
-        # character's body type. Must run BEFORE blend shapes so shape-key
+        # subject's body type. Must run BEFORE blend shapes so shape-key
         # deltas apply to a canonical-sized body.
         if coords_np is not None:
             _get_mhr_rest_verts(mhr_head, device)  # ensure metrics cached
@@ -1904,13 +1904,13 @@ class SAM3DBodyRenderFromPoseAndCharaJson:
             focal_length=focal_length,
             image=bg_bgr,
         )
-        # Autosave is owned by SAM3DBodySettingCharaJson now — render
-        # operates purely on the supplied chara_json, so there's no
+        # Autosave is owned by SAM3DBodySettingBodyPresetJson now — render
+        # operates purely on the supplied body_preset_json, so there's no
         # ambient slider state to persist here. ``settings`` and
         # ``corrected_pose_json`` are computed above for side effects
         # (mesh / camera composition); they're not returned because
         # the previous ``settings_json`` output proved redundant in
-        # practice — downstream nodes already see chara_json directly.
+        # practice — downstream nodes already see body_preset_json directly.
         del settings, corrected_pose_json
         return (numpy_to_comfy_image(rendered_bgr),)
 
@@ -1918,13 +1918,13 @@ class SAM3DBodyRenderFromPoseAndCharaJson:
 # Register nodes
 NODE_CLASS_MAPPINGS = {
     "SAM3DBodyProcessToJson": SAM3DBodyProcessToJson,
-    "SAM3DBodySettingCharaJson": SAM3DBodySettingCharaJson,
-    "SAM3DBodyRenderFromPoseAndCharaJson": SAM3DBodyRenderFromPoseAndCharaJson,
+    "SAM3DBodySettingBodyPresetJson": SAM3DBodySettingBodyPresetJson,
+    "SAM3DBodyRenderFromPoseAndBodyPresetJson": SAM3DBodyRenderFromPoseAndBodyPresetJson,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
     "SAM3DBodyProcessToJson": "SAM 3D Body: Process Image to Pose JSON",
-    "SAM3DBodySettingCharaJson": "SAM 3D Body: Setting Chara JSON",
-    "SAM3DBodyRenderFromPoseAndCharaJson":
-        "SAM 3D Body: Render Human From Pose And Chara JSON",
+    "SAM3DBodySettingBodyPresetJson": "SAM 3D Body: Setting Body Preset JSON",
+    "SAM3DBodyRenderFromPoseAndBodyPresetJson":
+        "SAM 3D Body: Render Human From Pose And Body Preset JSON",
 }

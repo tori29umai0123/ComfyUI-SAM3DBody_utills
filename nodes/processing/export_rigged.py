@@ -1,4 +1,4 @@
-"""SAM 3D Body: export a posed character as a rigged FBX (armature + mesh
+"""SAM 3D Body: export a posed body as a rigged FBX (armature + mesh
 + LBS vertex groups + single-frame animation).
 
 The heavy lifting — armature creation, vertex group binding, and FBX
@@ -45,7 +45,7 @@ _KNOWN_JOINT_NAMES = {
 
 
 # Slider -> PCA axis normalization / sign, copied from
-# SAM3DBodyRenderFromJson so the rigged character's body_params
+# SAM3DBodyRenderFromJson so the rigged body's body_params
 # produce the exact same shape that the render preview shows.
 _SHAPE_SLIDER_NORM = (1.00, 2.78, 4.42, 8.74, 10.82, 11.70, 13.39, 13.83, 16.62)
 _SHAPE_SLIDER_SIGN = (+1, -1, +1, +1, -1, +1, -1, +1, +1)
@@ -70,7 +70,7 @@ def _unpack_batched(tensor_tuple):
 
 
 class SAM3DBodyExportRiggedFBX:
-    """Write a rigged FBX for the character described by
+    """Write a rigged FBX for the body described by
     `preset_json` in the pose described by `pose_json`.
 
     Typical wiring:
@@ -87,9 +87,9 @@ class SAM3DBodyExportRiggedFBX:
         # its name label at small node sizes). Both placeholders parse
         # as empty-but-valid inputs so running the node with defaults
         # untouched still works — it just produces a neutral rest pose.
-        character_placeholder = (
+        body_preset_placeholder = (
             "{\n"
-            '  "_slot": "=== CHARACTER JSON ===",\n'
+            '  "_slot": "=== BODY PRESET JSON ===",\n'
             '  "_hint": "Paste Render node\'s settings_json output here.",\n'
             '  "body_params":   {},\n'
             '  "bone_lengths":  {},\n'
@@ -110,11 +110,11 @@ class SAM3DBodyExportRiggedFBX:
                 "model": ("SAM3D_MODEL", {
                     "tooltip": "Load SAM 3D Body Model ノードの出力",
                 }),
-                "character_json": ("STRING", {
-                    "multiline": True, "default": character_placeholder,
-                    "tooltip": "【キャラクター設定 JSON】\n"
+                "body_preset_json": ("STRING", {
+                    "multiline": True, "default": body_preset_placeholder,
+                    "tooltip": "【ボディプリセット JSON】\n"
                                "Render ノードの settings_json 出力を接続する、"
-                               "または chara_settings_presets/*.json の内容を貼り付け。\n"
+                               "または body_preset_settings/*.json の内容を貼り付け。\n"
                                "body_params / bone_lengths / blendshapes を含む JSON。",
                 }),
                 "pose_json": ("STRING", {
@@ -143,7 +143,7 @@ class SAM3DBodyExportRiggedFBX:
     FUNCTION = "export"
     CATEGORY = "SAM3DBody/export"
 
-    def export(self, model, character_json, pose_json, blender_exe, output_filename):
+    def export(self, model, body_preset_json, pose_json, blender_exe, output_filename):
         import folder_paths
 
         # Persist the supplied Blender path so the next freshly-added export
@@ -155,9 +155,9 @@ class SAM3DBodyExportRiggedFBX:
             print(f"[SAM3DBody] config.ini blender path save failed: {exc}")
 
         try:
-            preset = json.loads(character_json) if character_json.strip() else {}
+            preset = json.loads(body_preset_json) if body_preset_json.strip() else {}
         except Exception as exc:
-            print(f"[SAM3DBody] character_json parse failed: {exc}; using empty preset")
+            print(f"[SAM3DBody] body_preset_json parse failed: {exc}; using empty preset")
             preset = {}
         try:
             payload = json.loads(pose_json) if pose_json.strip() else {}
@@ -208,7 +208,7 @@ class SAM3DBodyExportRiggedFBX:
             (1, mhr_head.num_face_comps), dtype=torch.float32, device=device,
         )
 
-        # ============ Character REST pose (body_pose = 0) ============
+        # ============ Body Preset REST pose (body_pose = 0) ============
         zeros3 = torch.zeros((1, 3), dtype=torch.float32, device=device)
         body_zero = torch.zeros((1, 133), dtype=torch.float32, device=device)
         hand_zero = torch.zeros((1, 108), dtype=torch.float32, device=device)

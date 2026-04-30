@@ -1,21 +1,21 @@
 /**
- * SAM 3D Body — Character Editor node widget.
+ * SAM 3D Body — Body Preset Editor node widget.
  *
- * Mirror of pose_editor_widget.js for SAM3DBodyCharacterEditor — opens
- * /sam3d/editor/character in an in-page iframe modal and listens for
- * sam3d-chara-confirmed.
+ * Mirror of pose_editor_widget.js for SAM3DBodyBodyPresetEditor — opens
+ * /sam3d/editor/body_preset in an in-page iframe modal and listens for
+ * sam3d-body-preset-confirmed.
  */
 
 import { app } from "../../../../scripts/app.js";
 
-const TARGET_NODE = "SAM3DBodyCharacterEditor";
-const CONFIRM_MSG = "sam3d-chara-confirmed";
-const CANCEL_MSG  = "sam3d-chara-cancelled";
-const HIDDEN_NAME = "chara_json";
-const HIDDEN_CHARA_IMG = "chara_image";
+const TARGET_NODE = "SAM3DBodyBodyPresetEditor";
+const CONFIRM_MSG = "sam3d-body-preset-confirmed";
+const CANCEL_MSG  = "sam3d-body-preset-cancelled";
+const HIDDEN_NAME = "body_preset_json";
+const HIDDEN_BODY_PRESET_IMG = "body_preset_image";
 const STATUS_NAME = "status";
-const EDITOR_PATH = "/sam3d/editor/character";
-const MODAL_ID    = "sam3d-chara-editor-modal";
+const EDITOR_PATH = "/sam3d/editor/body_preset";
+const MODAL_ID    = "sam3d-body-preset-editor-modal";
 
 function _ensureHidden(node, name) {
     let w = node.widgets?.find((x) => x.name === name);
@@ -33,11 +33,11 @@ function _ensureHidden(node, name) {
 }
 
 function attachWidgets(node) {
-    if (node.__sam3dCharaEditorAttached) return;
-    node.__sam3dCharaEditorAttached = true;
+    if (node.__sam3dBodyPresetEditorAttached) return;
+    node.__sam3dBodyPresetEditorAttached = true;
 
-    const hiddenWidget    = _ensureHidden(node, HIDDEN_NAME);
-    const hiddenCharaImg  = _ensureHidden(node, HIDDEN_CHARA_IMG);
+    const hiddenWidget         = _ensureHidden(node, HIDDEN_NAME);
+    const hiddenBodyPresetImg  = _ensureHidden(node, HIDDEN_BODY_PRESET_IMG);
 
     const statusWidget = node.addWidget(
         "text",
@@ -48,22 +48,22 @@ function attachWidgets(node) {
     );
     statusWidget.disabled = true;
 
-    node.addWidget("button", "Open Character Editor", null, () => {
+    node.addWidget("button", "Open Body Preset Editor", null, () => {
         openEditor(node);
     });
 
     const refresh = () => {
         const v = hiddenWidget.value || "";
-        const imgFlag = hiddenCharaImg.value ? " +img" : "";
+        const imgFlag = hiddenBodyPresetImg.value ? " +img" : "";
         statusWidget.value = v
             ? `confirmed (${v.length} chars)${imgFlag}`
             : "(未確定 / unset)";
         node.setDirtyCanvas?.(true, true);
     };
     refresh();
-    node.__sam3dCharaRefresh    = refresh;
-    node.__sam3dCharaHidden     = hiddenWidget;
-    node.__sam3dCharaImgHidden  = hiddenCharaImg;
+    node.__sam3dBodyPresetRefresh    = refresh;
+    node.__sam3dBodyPresetHidden     = hiddenWidget;
+    node.__sam3dBodyPresetImgHidden  = hiddenBodyPresetImg;
 
     const origConfig = node.onConfigure;
     node.onConfigure = function (info) {
@@ -139,22 +139,22 @@ window.addEventListener("message", (evt) => {
         return;
     }
     if (evt.data.type !== CONFIRM_MSG) return;
-    const { node_id, chara_json, chara_image } = evt.data;
-    if (typeof chara_json !== "string") return;
+    const { node_id, body_preset_json, body_preset_image } = evt.data;
+    if (typeof body_preset_json !== "string") return;
     const target = app.graph?.getNodeById?.(Number(node_id));
-    if (target && target.comfyClass === TARGET_NODE && target.__sam3dCharaHidden) {
-        target.__sam3dCharaHidden.value = chara_json;
-        if (target.__sam3dCharaImgHidden) {
-            target.__sam3dCharaImgHidden.value =
-                typeof chara_image === "string" ? chara_image : "";
+    if (target && target.comfyClass === TARGET_NODE && target.__sam3dBodyPresetHidden) {
+        target.__sam3dBodyPresetHidden.value = body_preset_json;
+        if (target.__sam3dBodyPresetImgHidden) {
+            target.__sam3dBodyPresetImgHidden.value =
+                typeof body_preset_image === "string" ? body_preset_image : "";
         }
-        target.__sam3dCharaRefresh?.();
+        target.__sam3dBodyPresetRefresh?.();
     }
     closeModal();
 });
 
 app.registerExtension({
-    name: "SAM3DBody.CharacterEditorWidget",
+    name: "SAM3DBody.BodyPresetEditorWidget",
     async beforeRegisterNodeDef(nodeType, nodeData) {
         if (nodeData.name !== TARGET_NODE) return;
         const orig = nodeType.prototype.onNodeCreated;

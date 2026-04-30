@@ -2,7 +2,7 @@
 images, typically produced by ComfyUI-VideoHelperSuite's
 `VHS_LoadVideo`).
 
-The character is rigged **once** at its rest pose (body_pose = 0) — the
+The body is rigged **once** at its rest pose (body_pose = 0) — the
 same bind-pose convention used by `SAM3DBodyExportRiggedFBX`. Every
 input frame then contributes a keyframe on the pose bones, producing a
 multi-frame animation clip suitable for motion-capture use.
@@ -289,9 +289,9 @@ class SAM3DBodyExportAnimatedFBX:
     Typical wiring:
         VHS_LoadVideo         ──► images
         LoadSAM3DBodyModel    ──► model
-        RenderFromJson   ──► character_json (settings_json output)
+        RenderFromJson   ──► body_preset_json (settings_json output)
 
-    The character_json supplies body shape / bone lengths / blendshapes
+    The body_preset_json supplies body shape / bone lengths / blendshapes
     (identical to SAM3DBodyExportRiggedFBX). The rig is created at the
     rest pose, then each input frame is run through SAM 3D Body to
     produce per-frame joint rotations, which Blender bakes into a clip.
@@ -299,9 +299,9 @@ class SAM3DBodyExportAnimatedFBX:
 
     @classmethod
     def INPUT_TYPES(cls):
-        character_placeholder = (
+        body_preset_placeholder = (
             "{\n"
-            '  "_slot": "=== CHARACTER JSON ===",\n'
+            '  "_slot": "=== BODY PRESET JSON ===",\n'
             '  "_hint": "Paste Render node\'s settings_json output here.",\n'
             '  "body_params":   {},\n'
             '  "bone_lengths":  {},\n'
@@ -318,11 +318,11 @@ class SAM3DBodyExportAnimatedFBX:
                                "VideoHelperSuite の VHS_LoadVideo などで読み込んだ"
                                "連続フレーム ([B,H,W,C] 形式の IMAGE)。",
                 }),
-                "character_json": ("STRING", {
-                    "multiline": True, "default": character_placeholder,
-                    "tooltip": "【キャラクター設定 JSON】\n"
+                "body_preset_json": ("STRING", {
+                    "multiline": True, "default": body_preset_placeholder,
+                    "tooltip": "【ボディプリセット JSON】\n"
                                "Render ノードの settings_json 出力を接続する、"
-                               "または chara_settings_presets/*.json の内容を貼り付け。\n"
+                               "または body_preset_settings/*.json の内容を貼り付け。\n"
                                "リグは basic pose (body_pose=0) で生成され、"
                                "フレームごとに関節回転のみキーフレーム化される。",
                 }),
@@ -378,7 +378,7 @@ class SAM3DBodyExportAnimatedFBX:
     FUNCTION = "export"
     CATEGORY = "SAM3DBody/export"
 
-    def export(self, model, images, character_json, pose_adjust, fps,
+    def export(self, model, images, body_preset_json, pose_adjust, fps,
                bbox_threshold, inference_type,
                blender_exe, output_filename,
                root_motion_mode="auto_ground_lock",
@@ -402,9 +402,9 @@ class SAM3DBodyExportAnimatedFBX:
             lean_strength = 0.0
 
         try:
-            preset = json.loads(character_json) if character_json.strip() else {}
+            preset = json.loads(body_preset_json) if body_preset_json.strip() else {}
         except Exception as exc:
-            print(f"[SAM3DBody] character_json parse failed: {exc}; using empty preset")
+            print(f"[SAM3DBody] body_preset_json parse failed: {exc}; using empty preset")
             preset = {}
 
         num_frames = int(images.shape[0])
@@ -433,7 +433,7 @@ class SAM3DBodyExportAnimatedFBX:
         num_joints = parents.shape[0]
         faces = mhr_head.faces.detach().cpu().numpy().astype(np.int32)
 
-        # ============ Character rest pose (same path as export_rigged.py) ============
+        # ============ Body Preset rest pose (same path as export_rigged.py) ============
         bp = preset.get("body_params", {}) if isinstance(preset, dict) else {}
         bl = preset.get("bone_lengths", {}) if isinstance(preset, dict) else {}
         bs = preset.get("blendshapes",  {}) if isinstance(preset, dict) else {}
@@ -693,7 +693,7 @@ class SAM3DBodyExportAnimatedFBX:
         detected_trans = sum(1 for t in raw_trans if t is not None)
 
         # Apply the user-selected vertical correction. `auto_ground_lock`
-        # solves the most common "character floats above the ground" bug
+        # solves the most common "body floats above the ground" bug
         # that comes from pred_cam_t depth jitter; `xz_only` kills
         # vertical motion entirely (in-place walking); `free` preserves
         # the raw pred_cam_t for callers that want to post-process

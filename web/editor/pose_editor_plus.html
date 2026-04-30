@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>SAM 3D Body — Pose Editor +</title>
+<style>
+:root {
+  color-scheme: dark;
+  --bg: #1e1e1e;
+  --panel: #262626;
+  --panel-2: #2e2e2e;
+  --accent: #3a82ff;
+  --accent-2: #5aa0ff;
+  --text: #e6e6e6;
+  --muted: #9aa3ad;
+  --danger: #c0524a;
+  --success: #2d7d46;
+  --border: #3a3a3a;
+}
+html, body {
+  margin: 0; padding: 0; width: 100%; height: 100%;
+  background: var(--bg); color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  font-size: 13px; overflow: hidden;
+}
+button, input, select { font-family: inherit; font-size: 13px; color: var(--text); }
+button { cursor: pointer; }
+button:disabled { cursor: not-allowed; opacity: 0.55; }
+
+/* Layout ------------------------------------------------------------ */
+header {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 10px 16px; background: var(--panel); border-bottom: 1px solid var(--border);
+}
+header h1 { margin: 0; font-size: 15px; font-weight: 600; }
+header .right { display: flex; gap: 12px; align-items: center; }
+#status { font-size: 12px; color: var(--muted); }
+#confirm-btn {
+  background: var(--success); color: white; border: none;
+  padding: 7px 14px; border-radius: 4px; font-weight: 600;
+}
+#confirm-btn:hover:not(:disabled) { background: #36994f; }
+.lang-picker { font-size: 11px; color: var(--muted); }
+
+main { display: flex; height: calc(100vh - 47px); width: 100%; }
+
+#sidebar {
+  width: 360px; min-width: 320px; background: var(--panel);
+  border-right: 1px solid var(--border); padding: 12px;
+  overflow-y: auto;
+}
+#viewport {
+  flex: 1 1 auto; position: relative; background: #2a2c30;
+  display: flex; align-items: stretch; justify-content: stretch;
+}
+#three-canvas { flex: 1 1 auto; display: block; min-width: 0; min-height: 0; }
+#viewport-overlay {
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  color: var(--muted); pointer-events: none; padding: 24px;
+  text-align: center; font-size: 13px;
+}
+#viewport-overlay[hidden] { display: none; }
+
+/* Sections in sidebar ---------------------------------------------- */
+section { margin-bottom: 14px; }
+section h2 { font-size: 12px; margin: 0 0 6px; color: var(--muted); text-transform: uppercase; }
+.muted { color: var(--muted); font-size: 11px; }
+
+.file-drop {
+  display: block; border: 1px dashed var(--border); border-radius: 4px;
+  padding: 10px; text-align: center; background: var(--panel-2);
+  cursor: pointer;
+}
+.file-drop input[type="file"] { display: none; }
+.file-drop.dragover { background: #2a3a4a; border-color: var(--accent); }
+.file-drop img { max-width: 100%; max-height: 80px; margin-top: 6px; }
+
+/* Sidebar action buttons — teal-blue family, matching the single
+   Pose Editor's #run-btn / #load-preset-btn / etc. */
+.btn {
+  background: #355; color: #cef; border: 1px solid #588;
+  padding: 6px 10px; border-radius: 4px; cursor: pointer;
+  font-size: 12px;
+}
+.btn:hover:not(:disabled) { background: #477; }
+.btn:disabled {
+  background: #2a3036; color: #9aa; border-color: #445;
+  cursor: not-allowed; opacity: 0.75;
+}
+/* Primary buttons take a slightly stronger fill so they read as the
+   main call-to-action without leaving the teal palette. */
+.btn-primary { background: #477; color: #def; border-color: #6aa; }
+.btn-primary:hover:not(:disabled) { background: #588; }
+.btn-danger {
+  background: #5a2a2a; color: #fcc; border: 1px solid #944;
+}
+.btn-danger:hover:not(:disabled) { background: #733; }
+
+.row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+
+/* Person list ------------------------------------------------------ */
+.person-card {
+  background: var(--panel-2); border: 1px solid var(--border);
+  border-radius: 4px; padding: 10px; margin-bottom: 8px;
+  display: flex; flex-direction: column; gap: 6px;
+  cursor: pointer;
+}
+.person-card:hover:not(.active) { background: #303030; border-color: #4a4a4a; }
+.person-card.active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); cursor: default; }
+.person-card.active::before {
+  content: "● ACTIVE";
+  font-size: 10px; color: var(--accent); font-weight: 700;
+  letter-spacing: 0.05em;
+}
+
+/* Quick-switch chip row above the person list. One chip per person —
+   clicking switches active focus without scrolling through the cards. */
+.person-quick-switch {
+  display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px;
+}
+.person-quick-switch .chip {
+  padding: 3px 10px; font-size: 11px;
+  background: var(--panel-2); border: 1px solid var(--border);
+  border-radius: 12px; cursor: pointer; user-select: none;
+  color: var(--muted);
+}
+.person-quick-switch .chip:hover { background: #303030; color: var(--text); }
+.person-quick-switch .chip.active {
+  background: var(--accent); border-color: var(--accent-2);
+  color: white; font-weight: 600;
+}
+.person-card .head {
+  display: flex; justify-content: space-between; align-items: center;
+}
+.person-card .head .pname {
+  font-weight: 600; cursor: pointer; user-select: none;
+}
+.person-card .head .actions { display: flex; gap: 4px; }
+.height-row { display: flex; gap: 6px; align-items: center; }
+.height-row input[type="number"] {
+  background: var(--panel); border: 1px solid var(--border); border-radius: 3px;
+  padding: 3px 6px; width: 80px;
+}
+.height-row .unit-suffix { color: var(--muted); font-size: 11px; min-width: 30px; }
+.bbox-readout { font-size: 10px; color: var(--muted); }
+
+.hand-row { display: flex; gap: 6px; align-items: stretch; }
+.hand-row .hand-drop {
+  flex: 1 1 auto; border: 1px dashed var(--border); border-radius: 3px;
+  padding: 4px 6px; text-align: center; cursor: pointer;
+  background: var(--panel); font-size: 11px; min-height: 36px;
+  display: flex; align-items: center; justify-content: center;
+}
+.hand-row .hand-drop input[type="file"] { display: none; }
+.hand-row .hand-drop.dragover { border-color: var(--accent); background: #2a3a4a; }
+.hand-row .hand-drop img { max-height: 36px; max-width: 100%; }
+.hand-row .flip-btn {
+  flex: 0 0 auto; padding: 0 8px; font-size: 11px;
+  background: #355; color: #cef; border: 1px solid #588; border-radius: 3px;
+}
+.hand-row .flip-btn:disabled { background: #2a2a2a; color: #555; border-color: #333; }
+
+/* Bbox draw overlay ------------------------------------------------ */
+#bbox-overlay {
+  position: absolute; inset: 0; pointer-events: none; z-index: 4;
+}
+body.bbox-draw-mode #bbox-overlay { pointer-events: auto; cursor: crosshair; }
+body.bbox-draw-mode #sidebar,
+body.bbox-draw-mode #confirm-btn { pointer-events: none; opacity: 0.5; }
+/* 削除 / × buttons stay fully interactive even while a draw is in
+   progress so the user can always cancel a half-finished add. */
+body.bbox-draw-mode #sidebar .btn-danger {
+  pointer-events: auto !important; opacity: 1 !important;
+}
+body.bbox-draw-mode #bbox-overlay .delete-btn {
+  pointer-events: auto !important; opacity: 1 !important;
+}
+
+.bbox-rect {
+  position: absolute; border: 2px solid var(--accent);
+  background: rgba(60, 130, 255, 0.22);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.4) inset;
+  pointer-events: auto;
+}
+.bbox-rect.active {
+  border-color: #ffce5a; background: rgba(255, 206, 90, 0.18);
+}
+.bbox-rect .pid-label {
+  position: absolute; top: -18px; left: 0;
+  padding: 0 4px; font-size: 10px; color: white;
+  background: var(--accent); border-radius: 2px;
+}
+.bbox-rect.active .pid-label { background: #d6a83c; color: #1a1a1a; }
+.bbox-rect .delete-btn {
+  position: absolute; top: -10px; right: -10px;
+  width: 18px; height: 18px; line-height: 14px;
+  border-radius: 50%; background: var(--danger); color: white;
+  border: 1px solid #1a1a1a; font-size: 12px; padding: 0;
+}
+/* Object bboxes — yellow / amber family so they're visually distinct
+   from the person's blue boxes while reusing the same delete-button +
+   active-highlight pattern. */
+.bbox-obj {
+  position: absolute; border: 2px solid #ffce5a;
+  background: rgba(255, 206, 90, 0.18);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.4) inset;
+  pointer-events: auto;
+}
+.bbox-obj.active { background: rgba(255, 206, 90, 0.28); }
+.bbox-obj .pid-label {
+  position: absolute; top: -18px; left: 0;
+  padding: 0 4px; font-size: 10px; color: #1a1a1a;
+  background: #ffce5a; border-radius: 2px; font-weight: 600;
+}
+.bbox-obj .delete-btn {
+  position: absolute; top: -10px; right: -10px;
+  width: 18px; height: 18px; line-height: 14px;
+  border-radius: 50%; background: var(--danger); color: white;
+  border: 1px solid #1a1a1a; font-size: 12px; padding: 0;
+}
+.bbox-obj-pos-add {
+  position: absolute; border: 2px dashed #ffce5a;
+  background: rgba(255, 206, 90, 0.14);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.4) inset;
+  pointer-events: auto; opacity: 0.55;
+}
+.bbox-obj-pos-add.active { opacity: 1; }
+.bbox-obj-pos-add .pid-label {
+  position: absolute; top: -18px; left: 0;
+  padding: 0 4px; font-size: 10px; color: #1a1a1a;
+  background: #ffce5a; border-radius: 2px;
+}
+.bbox-obj-pos-add .delete-btn {
+  position: absolute; top: -10px; right: -10px;
+  width: 18px; height: 18px; line-height: 14px;
+  border-radius: 50%; background: var(--danger); color: white;
+  border: 1px solid #1a1a1a; font-size: 12px; padding: 0;
+}
+
+/* Additional positive bboxes (Shift+left-click drag) — same blue family
+   as the primary box but dashed so the user can tell which one is the
+   "main" rectangle the thumbnail is cropped from. */
+.bbox-pos-add {
+  position: absolute; border: 2px dashed var(--accent);
+  background: rgba(60, 130, 255, 0.16);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.4) inset;
+  pointer-events: auto; opacity: 0.55;
+}
+.bbox-pos-add.active { opacity: 1; }
+.bbox-pos-add .pid-label {
+  position: absolute; top: -18px; left: 0;
+  padding: 0 4px; font-size: 10px; color: white;
+  background: var(--accent); border-radius: 2px;
+}
+.bbox-pos-add .delete-btn {
+  position: absolute; top: -10px; right: -10px;
+  width: 18px; height: 18px; line-height: 14px;
+  border-radius: 50%; background: var(--danger); color: white;
+  border: 1px solid #1a1a1a; font-size: 12px; padding: 0;
+}
+/* Negative bboxes (right-click drag) — red dashed outline distinguishes
+   them from the blue positive boxes. Only the active person's negative
+   boxes are fully opaque; others fade so they don't visually compete. */
+.bbox-neg {
+  position: absolute; border: 2px dashed #ff5050;
+  background: rgba(255, 80, 80, 0.18);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.4) inset;
+  pointer-events: auto; opacity: 0.45;
+}
+.bbox-neg.active { opacity: 1; }
+.bbox-neg .neg-label {
+  position: absolute; top: -18px; left: 0;
+  padding: 0 4px; font-size: 10px; color: white;
+  background: #c54040; border-radius: 2px;
+}
+.bbox-neg .delete-btn {
+  position: absolute; top: -10px; right: -10px;
+  width: 18px; height: 18px; line-height: 14px;
+  border-radius: 50%; background: var(--danger); color: white;
+  border: 1px solid #1a1a1a; font-size: 12px; padding: 0;
+}
+#bbox-rect-active {
+  position: absolute; border: 2px dashed var(--accent);
+  background: rgba(60, 130, 255, 0.2); pointer-events: none;
+}
+#bbox-rect-active.neg {
+  border-color: #ff5050; background: rgba(255, 80, 80, 0.2);
+}
+#bbox-rect-active[hidden] { display: none; }
+/* Hint banner shown only while we're in image view + a person is active */
+#neg-bbox-hint {
+  position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%);
+  z-index: 6; padding: 4px 10px; font-size: 11px;
+  background: rgba(0, 0, 0, 0.55); color: #cef;
+  border: 1px solid #588; border-radius: 4px;
+  pointer-events: none; user-select: none;
+}
+#neg-bbox-hint[hidden] { display: none; }
+
+/* Object overlay — 2D sprites composited on top of the 3D viewer at
+   confirm time. Sits above bbox-overlay so the user can manipulate
+   sprites while bbox draw mode is active for other purposes. */
+#object-overlay {
+  position: absolute; inset: 0; pointer-events: none; z-index: 6;
+}
+.object-sprite {
+  position: absolute; pointer-events: auto; cursor: grab;
+  transform-origin: center center; user-select: none;
+  outline: 1px dashed transparent;
+}
+.object-sprite.active { outline: 2px solid #ffce5a; outline-offset: 0; }
+.object-sprite img {
+  display: block; width: 100%; height: 100%;
+  pointer-events: none; user-select: none;
+  -webkit-user-drag: none;
+}
+.object-sprite.dragging { cursor: grabbing; }
+
+/* Corner resize handles — only visible while the sprite is active. */
+.object-sprite .corner-handle {
+  position: absolute; width: 14px; height: 14px;
+  background: #ffce5a; border: 2px solid #1a1a1a;
+  border-radius: 50%; pointer-events: auto;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.3);
+}
+.object-sprite:not(.active) .corner-handle { display: none; }
+.object-sprite .corner-handle.tl { top: -7px;    left: -7px;   cursor: nwse-resize; }
+.object-sprite .corner-handle.tr { top: -7px;    right: -7px;  cursor: nesw-resize; }
+.object-sprite .corner-handle.bl { bottom: -7px; left: -7px;   cursor: nesw-resize; }
+.object-sprite .corner-handle.br { bottom: -7px; right: -7px;  cursor: nwse-resize; }
+
+/* Object list cards in the sidebar — compact: thumb + sliders + delete */
+.object-card {
+  background: var(--panel-2); border: 1px solid var(--border);
+  border-radius: 4px; padding: 8px; margin-top: 6px;
+  display: flex; flex-direction: column; gap: 4px; cursor: pointer;
+}
+.object-card.active { border-color: #ffce5a; box-shadow: 0 0 0 1px #ffce5a; }
+.object-card .head { display: flex; justify-content: space-between; align-items: center; }
+.object-card img.thumb {
+  max-width: 100%; max-height: 50px; align-self: center;
+  background: #111; border: 1px solid var(--border); padding: 2px;
+}
+
+#run-btn {
+  width: 100%; padding: 8px 12px; margin-top: 6px; font-size: 13px;
+  background: #355; color: #cef; border: 1px solid #588; border-radius: 4px;
+  cursor: pointer; font-weight: 600;
+}
+#run-btn:hover:not(:disabled) { background: #477; }
+#run-btn:disabled {
+  background: #2a3036; color: #9aa; border-color: #445;
+  cursor: not-allowed; opacity: 0.75;
+}
+#run-info { font-size: 11px; color: var(--muted); margin-top: 4px; min-height: 14px; }
+
+/* Image preview overlay (inside viewport) -------------------------- */
+#image-display {
+  position: absolute; top: 8px; left: 8px; z-index: 3;
+  max-width: 35%; max-height: 35%; border: 1px solid var(--border);
+  background: var(--panel); padding: 4px;
+  display: none;
+}
+#image-display.visible { display: block; }
+#image-display img { display: block; max-width: 100%; max-height: 240px; }
+#image-display .caption { font-size: 10px; color: var(--muted); margin-top: 2px; }
+
+/* Toolbar buttons inside viewport — match the single Pose Editor's
+   teal-blue palette so both pages share a visual language. */
+.viewport-toolbar {
+  position: absolute; top: 8px; right: 8px; z-index: 5;
+  display: flex; gap: 6px; flex-direction: column;
+}
+.viewport-toolbar button,
+.viewport-toolbar-left button {
+  padding: 6px 12px; font-size: 12px; cursor: pointer;
+  background: rgba(38, 42, 50, 0.92); color: #cef;
+  border: 1px solid #588; border-radius: 4px;
+  backdrop-filter: blur(2px);
+}
+.viewport-toolbar button:hover:not(:disabled),
+.viewport-toolbar-left button:hover:not(:disabled) {
+  background: rgba(52, 82, 100, 0.9);
+}
+.viewport-toolbar button:disabled,
+.viewport-toolbar-left button:disabled {
+  background: rgba(34, 36, 42, 0.7); color: #667; cursor: not-allowed;
+}
+/* "Currently selected" state for toggleable right-toolbar buttons
+   (translate / rotate gizmo, image preview overlay). */
+.viewport-toolbar button.active {
+  background: var(--accent); color: white; border-color: var(--accent-2);
+}
+
+/* Left-side toolbar — range-select / reset / background color. These are
+   scene-wide (not person-specific) so they're always visible. */
+.viewport-toolbar-left {
+  position: absolute; top: 8px; left: 8px; z-index: 7;
+  display: flex; gap: 6px; align-items: center;
+}
+/* Range-select active state — red palette to signal the mode change. */
+#range-select-btn-plus.active {
+  background: rgba(90, 32, 32, 0.85); color: #fcc; border-color: #944;
+}
+#range-reset-btn-plus {
+  background: rgba(60, 32, 32, 0.85); color: #fcc; border-color: #944;
+}
+#range-reset-btn-plus:hover:not(:disabled) { background: rgba(110, 50, 50, 0.9); }
+#range-reset-btn-plus[hidden] { display: none; }
+#bg-color-btn-plus {
+  display: inline-flex; align-items: center; gap: 6px;
+}
+#bg-color-swatch-plus {
+  width: 14px; height: 14px; border-radius: 2px;
+  border: 1px solid rgba(255, 255, 255, 0.6); background: #ffffff;
+  flex: 0 0 14px;
+}
+#bg-color-input-plus {
+  position: absolute; opacity: 0; pointer-events: none; width: 0; height: 0;
+}
+
+/* Range overlay for the multi editor — sits above bbox / object overlays
+   so the red selection rect captures pointer events when active. */
+#range-overlay-plus {
+  position: absolute; inset: 0; pointer-events: none; z-index: 6;
+}
+body.range-select-mode #range-overlay-plus {
+  pointer-events: auto; cursor: crosshair;
+}
+#range-rect-plus {
+  position: absolute; border: 2px solid #ff5050;
+  background: rgba(255, 0, 0, 0.25);
+  pointer-events: none;
+}
+#range-rect-plus[hidden] { display: none; }
+body.range-select-mode #sidebar,
+body.range-select-mode .viewport-toolbar,
+body.range-select-mode #object-overlay,
+body.range-select-mode #tabs {
+  pointer-events: none; opacity: 0.5;
+}
+body.range-select-mode #range-select-btn-plus,
+body.range-select-mode #range-reset-btn-plus,
+body.range-select-mode #bg-color-btn-plus {
+  pointer-events: auto; opacity: 1;
+}
+
+#tabs {
+  position: absolute; bottom: 8px; left: 8px; z-index: 5;
+  display: flex; gap: 4px;
+  background: rgba(38, 42, 50, 0.92); border: 1px solid var(--border);
+  border-radius: 4px; padding: 3px;
+}
+#tabs button {
+  background: transparent; color: var(--muted); border: none;
+  padding: 4px 10px; border-radius: 3px; font-size: 11px;
+}
+#tabs button.active { background: var(--accent); color: white; }
+</style>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.170.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.170.0/examples/jsm/"
+  }
+}
+</script>
+</head>
+<body>
+<header>
+  <div><h1>SAM 3D Body — Pose Editor +</h1></div>
+  <div class="right">
+    <div id="status">initializing…</div>
+    <button id="confirm-btn" disabled title="Ctrl+Enter">確定して閉じる / Confirm &amp; Close</button>
+    <span class="lang-picker">Ctrl+Enter</span>
+  </div>
+</header>
+<main>
+  <aside id="sidebar">
+    <section>
+      <h2>Input</h2>
+      <label class="file-drop" id="file-drop">
+        <input type="file" id="file-input" accept="image/*" />
+        <span id="file-label">クリックして画像を選択 / ドロップ</span>
+        <img id="preview" alt="preview" hidden />
+      </label>
+      <div id="image-info" class="muted"></div>
+    </section>
+
+    <section>
+      <h2>People</h2>
+      <div class="row">
+        <button id="add-person-btn" class="btn btn-primary" disabled>+ Add Person</button>
+        <span id="add-person-hint" class="muted"></span>
+      </div>
+      <div id="person-list"></div>
+    </section>
+
+    <section>
+      <h2>Objects</h2>
+      <div class="row">
+        <button id="add-object-btn" class="btn btn-primary" disabled>+ Object</button>
+        <span id="add-object-hint" class="muted"></span>
+      </div>
+      <div id="object-list"></div>
+    </section>
+
+    <section>
+      <h2>Inference</h2>
+      <button id="run-btn" disabled>推論実行 / Run Inference</button>
+      <div id="run-info"></div>
+    </section>
+  </aside>
+
+  <section id="viewport">
+    <canvas id="three-canvas"></canvas>
+    <div id="viewport-overlay">画像をロードして人物を追加し、推論を実行してください</div>
+
+    <div id="image-display"><img id="image-display-img" alt="" /><div class="caption" id="image-display-caption">image</div></div>
+
+    <div class="viewport-toolbar-left">
+      <button id="range-select-btn-plus" title="3D ビューの撮影範囲を指定">画像範囲</button>
+      <button id="range-reset-btn-plus" hidden title="撮影範囲をクリア">reset</button>
+      <button id="bg-color-btn-plus" title="3D ビューの背景色">
+        <span id="bg-color-swatch-plus"></span>
+        <span>背景色</span>
+        <input type="color" id="bg-color-input-plus" value="#ffffff" />
+      </button>
+    </div>
+
+    <div class="viewport-toolbar">
+      <button id="gizmo-translate-btn" class="active" title="移動 (W)">移動</button>
+      <button id="gizmo-rotate-btn" title="回転 (E)">回転</button>
+      <button id="reset-translate-btn" title="現在の人物の移動を 0 に戻す">移動リセット</button>
+      <button id="reset-rotate-btn" title="現在の人物の回転を 0 に戻す">回転リセット</button>
+      <button id="toggle-img-btn" title="入力画像オーバーレイ">入力画像表示</button>
+    </div>
+
+    <div id="tabs">
+      <button id="tab-3d" class="active" data-view="3d">3D</button>
+      <button id="tab-image" data-view="image">Image</button>
+    </div>
+
+    <div id="object-overlay"></div>
+    <div id="bbox-overlay">
+      <div id="bbox-rect-active" hidden></div>
+    </div>
+    <div id="range-overlay-plus">
+      <div id="range-rect-plus" hidden></div>
+    </div>
+    <div id="neg-bbox-hint" hidden>
+      <b>左ドラッグ</b>で正領域を追加 / <b>右ドラッグ</b>で除外領域を追加 (Left-drag: add positive, Right-drag: add negative)
+    </div>
+  </section>
+</main>
+
+<script type="module" src="/extensions/ComfyUI-SAM3DBody_utills/editor/static/pose_editor_plus.js?v=5"></script>
+</body>
+</html>

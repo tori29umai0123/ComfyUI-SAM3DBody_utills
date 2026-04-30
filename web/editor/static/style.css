@@ -166,7 +166,7 @@ body.ui-busy { cursor: wait; }
  *
  * When ``body.pose-edit-mode`` is set, everything outside the rotation
  * editor panel is locked: tab nav freezes, the file drop / run button, the
- * lean slider, the Character panel (preset picker, JSON upload) all become
+ * lean slider, the Body Preset panel (preset picker, JSON upload) all become
  * inert. Export FBX/BVH stay interactive so "微調整した後のポーズで出力"
  * works. During a FBX/BVH export, ``body.ui-export-busy`` layers on a
  * second lock that also disables the rotation UI itself.

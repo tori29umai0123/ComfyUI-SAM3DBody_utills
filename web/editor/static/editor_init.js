@@ -3,8 +3,8 @@
 // ComfyUI-side postMessage, and graceful no-op stubs for endpoints we
 // did NOT port from the standalone app).
 //
-// The two HTML pages (pose_editor.html / character_editor.html) each
-// set ``window.SAM3D_EDITOR_MODE = "pose" | "character"`` *before* the
+// The two HTML pages (pose_editor.html / body_preset_editor.html) each
+// set ``window.SAM3D_EDITOR_MODE = "pose" | "body_preset"`` *before* the
 // script tags load, so this module can branch on it.
 
 (() => {
@@ -13,12 +13,12 @@
   const MODE = (window.SAM3D_EDITOR_MODE || "pose").toLowerCase();
   console.log("[SAM3D editor_init] MODE =", MODE);
   const CONFIRM_TYPE_BY_MODE = {
-    pose:      "sam3d-pose-confirmed",
-    character: "sam3d-chara-confirmed",
+    pose:        "sam3d-pose-confirmed",
+    body_preset: "sam3d-body-preset-confirmed",
   };
   const PAYLOAD_KEY_BY_MODE = {
-    pose:      "pose_json",
-    character: "chara_json",
+    pose:        "pose_json",
+    body_preset: "body_preset_json",
   };
 
   const params = new URLSearchParams(location.search);
@@ -27,9 +27,9 @@
 
   // Force the initial tab. editor_core.js reads localStorage("body3d.tab")
   // on boot — for the editor we always want to land on the mode's tab and
-  // never restore an image-tab session into the character editor (or vice
+  // never restore an image-tab session into the body preset editor (or vice
   // versa).
-  const INITIAL_TAB = MODE === "character" ? "make" : "image";
+  const INITIAL_TAB = MODE === "body_preset" ? "make" : "image";
   try {
     localStorage.setItem("body3d.tab", INITIAL_TAB);
   } catch (_e) {}
@@ -176,13 +176,13 @@
       }
       return p;
     }
-    // character: ship the live tabSettings.make subset.
-    const m = window.__sam3dCharaPayload;
+    // body_preset: ship the live tabSettings.make subset.
+    const m = window.__sam3dBodyPresetPayload;
     if (!m) {
       throw new Error(
-        "character settings are empty — adjust at least one slider " +
+        "body preset settings are empty — adjust at least one slider " +
         "or load a preset before confirming.\n" +
-        "キャラクター設定が空です。スライダーまたはプリセットで一度設定してください。"
+        "ボディプリセット設定が空です。スライダーまたはプリセットで一度設定してください。"
       );
     }
     return {
@@ -249,14 +249,14 @@
           msg.hand_r_image_size = { width: hands.right.width, height: hands.right.height };
         }
       } catch (e) { console.warn("hand_image capture failed:", e); }
-    } else if (MODE === "character") {
+    } else if (MODE === "body_preset") {
       try {
-        const cap = window.__sam3dCaptureCharaImage?.();
+        const cap = window.__sam3dCaptureBodyPresetImage?.();
         if (cap?.dataUrl) {
-          msg.chara_image = cap.dataUrl;
-          msg.chara_image_size = { width: cap.width, height: cap.height };
+          msg.body_preset_image = cap.dataUrl;
+          msg.body_preset_image_size = { width: cap.width, height: cap.height };
         }
-      } catch (e) { console.warn("chara_image capture failed:", e); }
+      } catch (e) { console.warn("body_preset_image capture failed:", e); }
     }
     const target = resolveTargetWindow();
     if (!target) {

@@ -1,4 +1,4 @@
-"""Character body-shape application (PCA body shape + bone-length scaling +
+"""Body preset shape application (PCA body shape + bone-length scaling +
 blend shapes), ported from ``nodes/processing/process.py`` of the upstream
 ComfyUI-SAM3DBody_utills fork.
 

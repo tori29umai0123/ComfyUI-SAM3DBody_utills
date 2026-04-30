@@ -1,25 +1,25 @@
 /**
  * SAM3DBody: preset → slider sync for the
- * `SAM 3D Body: Setting Chara JSON` node.
+ * `SAM 3D Body: Setting Body Preset JSON` node.
  *
  * The `preset` dropdown drives the slider widgets. When the user picks
  * a preset — including the default `autosave` entry — the frontend
- * fetches `chara_settings_presets/<name>.json` and copies its
+ * fetches `body_preset_settings/<name>.json` and copies its
  * body/bone/blendshape values into the corresponding widgets. The user
  * can then tweak the sliders further; the Python side does not re-apply
  * the preset at build time, so manual adjustments are respected.
  *
  * (Previous revision targeted the legacy
  * ``SAM3DBodyRenderFromJson`` node, which has been split into
- * SettingCharaJson + RenderFromPoseAndCharaJson. The preset → slider
- * sync logic moved to SettingCharaJson because that's where the
- * widgets now live; render is purely chara_json-driven.)
+ * SettingBodyPresetJson + RenderFromPoseAndBodyPresetJson. The preset →
+ * slider sync logic moved to SettingBodyPresetJson because that's where
+ * the widgets now live; render is purely body_preset_json-driven.)
  */
 
 import { app } from "../../../../scripts/app.js";
 import { api } from "../../../../scripts/api.js";
 
-const TARGET_NODE = "SAM3DBodySettingCharaJson";
+const TARGET_NODE = "SAM3DBodySettingBodyPresetJson";
 
 async function fetchPreset(name) {
     if (!name) return null;

@@ -250,7 +250,7 @@
         "Node name for S&R": "SAM3DBodyExportAnimatedFBX"
       },
       "widgets_values": [
-        "{\n  \"_slot\": \"=== CHARACTER JSON ===\",\n  \"_hint\": \"Paste Render node's settings_json output here.\",\n  \"body_params\":   {},\n  \"bone_lengths\":  {},\n  \"blendshapes\":   {}\n}",
+        "{\n  \"_slot\": \"=== BODY PRESET JSON ===\",\n  \"_hint\": \"Paste Render node's settings_json output here.\",\n  \"body_params\":   {},\n  \"bone_lengths\":  {},\n  \"blendshapes\":   {}\n}",
         0,
         30,
         0.8,

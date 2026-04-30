@@ -20,7 +20,7 @@ const runBtn = $("run-btn");
 const runInfo = $("run-info");
 const overlay = $("viewport-overlay");
 // Segmentation params now live in config.ini [segmentation]; no longer in UI.
-const characterSection = $("character-section");
+const bodyPresetSection = $("body-preset-section");
 const presetSelect = $("preset-select");
 const loadPresetBtn = $("load-preset-btn");
 const resetBtn = $("reset-btn");
@@ -29,10 +29,10 @@ const exportBvhBtn = $("export-bvh-btn");
 const fbxInfo = $("fbx-info");
 const bvhInfo = $("bvh-info");
 const renderInfo = $("render-info");
-const charJsonInput = $("char-json-input");
-const charJsonDrop = $("char-json-drop");
-const charJsonLabel = $("char-json-label");
-const charSourceInfo = $("char-source-info");
+const bodyPresetJsonInput = $("body-preset-json-input");
+const bodyPresetJsonDrop = $("body-preset-json-drop");
+const bodyPresetJsonLabel = $("body-preset-json-label");
+const bodyPresetSourceInfo = $("body-preset-source-info");
 const bodyParamsEl = $("body-params-sliders");
 const boneLengthsEl = $("bone-lengths-sliders");
 const blendshapesEl = $("blendshapes-sliders");
@@ -63,17 +63,17 @@ function activateTab(name) {
   document.querySelectorAll("[data-tab-panel]").forEach((el) => {
     el.hidden = el.dataset.tabPanel !== name;
   });
-  // The Character panel (preset dropdown + JSON upload, plus sliders on
+  // The Body Preset panel (preset dropdown + JSON upload, plus sliders on
   // Make tab) is always available on image/video/make tabs — users can
-  // stage a preset / upload a custom character before running inference.
-  characterUnlocked = true;
+  // stage a preset / upload a custom body preset before running inference.
+  bodyPresetUnlocked = true;
   document.querySelectorAll("[data-tab-show]").forEach((el) => {
     const allowed = el.dataset.tabShow.split(/\s+/).filter(Boolean);
     el.hidden = !allowed.includes(name);
   });
   // `data-tab-hide="x y"` hides the element only on those tabs. Useful for
   // entries that live inside a shared section (e.g. Export FBX button in the
-  // Character panel) but should disappear on one tab.
+  // Body Preset panel) but should disappear on one tab.
   document.querySelectorAll("[data-tab-hide]").forEach((el) => {
     const hidden = el.dataset.tabHide.split(/\s+/).filter(Boolean);
     el.hidden = hidden.includes(name);
@@ -86,19 +86,19 @@ function activateTab(name) {
   // Swap the viewport's cached mesh/animation/camera state to match the tab.
   viewer.switchTab(name);
 
-  // Rebind settings + Character panel UI to the active tab's slot so each
+  // Rebind settings + Body Preset panel UI to the active tab's slot so each
   // tab keeps its own body_params / bone_lengths / blendshapes / preset
-  // selection. Admin tab has no character state — leave `settings` alone.
+  // selection. Admin tab has no body-preset state — leave `settings` alone.
   if (tabSettings[name]) {
     settings = tabSettings[name];
     refreshSlidersFromSettings();
-    refreshCharPanelFromState();
+    refreshBodyPresetPanelFromState();
   }
 
   // Rebind currentJobId so /api/render targets the right session. Image /
   // video fall back to MAKE_JOB_ID until inference produces a tab-specific
   // session — this lets the viewport show the MHR neutral body (with the
-  // tab's current character settings) before the user runs anything.
+  // tab's current body preset settings) before the user runs anything.
   if (name in tabJobIds) {
     currentJobId = tabJobIds[name] || MAKE_JOB_ID;
   }
@@ -121,9 +121,9 @@ function initTabs() {
   activateTab(initial);
 }
 
-// Track whether a pose session exists so the Character panel only appears
+// Track whether a pose session exists so the Body Preset panel only appears
 // after the user has run /api/process at least once (matches prior behaviour).
-let characterUnlocked = false;
+let bodyPresetUnlocked = false;
 let renderAvailable = false;  // Save PNG is disabled until the first mesh is drawn.
 
 const viewer = initViewer();
@@ -136,11 +136,11 @@ let currentJobId = null;
 // Kept in sync with `currentJobId` on every tab switch.
 const tabJobIds = { image: null, video: null, make: MAKE_JOB_ID };
 let schema = null;
-// Per-tab character-shape state. Image / video / make tabs each own an
-// independent `settings` snapshot and Character-panel UI state (selected
+// Per-tab body-preset shape state. Image / video / make tabs each own an
+// independent `settings` snapshot and Body Preset panel UI state (selected
 // preset, source label, JSON upload label). `settings` is rebound on tab
 // switch to point at the active tab's slot so that existing readers
-// (render calls, slider handlers) work unchanged. The Character panel
+// (render calls, slider handlers) work unchanged. The Body Preset panel
 // (preset dropdown + JSON upload) itself is shared DOM across tabs — we
 // just swap the values it displays when the tab changes.
 // ``lean_correction`` starts at 0.5 (the calibrated "いい感じ" value) so a
@@ -156,7 +156,7 @@ function _freshSettings() {
     pose_adjust: { lean_correction: LEAN_CORRECTION_DEFAULT },
   };
 }
-function _freshCharState() {
+function _freshBodyPresetState() {
   return { preset: "", sourceText: "", jsonLabel: null };
 }
 const tabSettings = {
@@ -164,10 +164,10 @@ const tabSettings = {
   video: _freshSettings(),
   make:  _freshSettings(),
 };
-const tabCharState = {
-  image: _freshCharState(),
-  video: _freshCharState(),
-  make:  _freshCharState(),
+const tabBodyPresetState = {
+  image: _freshBodyPresetState(),
+  video: _freshBodyPresetState(),
+  make:  _freshBodyPresetState(),
 };
 let settings = tabSettings.image;
 
@@ -202,6 +202,14 @@ function initViewer() {
   controls.update();
 
   let meshGroup = null;
+  // Inner OBJ root mesh inside meshGroup wrapper. We use a wrapper so the
+  // body-anchor gizmo (and rotation pivot) lives at the body's visual
+  // centre (matches the Pose Editor + behaviour) — the inner mesh is
+  // shifted by ``-_meshLocalCenter`` so its bbox centre sits at the
+  // wrapper's local origin, while the wrapper itself is parked at the
+  // visual centre in scene-world coords.
+  let _meshInner = null;
+  const _meshLocalCenter = new THREE.Vector3();
   // Framing done once per job_id to avoid camera jump on every slider edit.
   let framedJob = null;
   // Per-job mesh fit (height-scale + center / ground offset) computed on
@@ -215,6 +223,17 @@ function initViewer() {
   // _meshFitOffset so "Reset all bones" can wipe it without losing the
   // first-load centering. Final mesh position = fit anchor + hips offset.
   const _hipsOffset = new THREE.Vector3();
+  // Manual body-anchor transform — driven by the translate / rotate gizmo
+  // bound to meshGroup whenever pose-edit (IK) mode is OFF. Applied on top
+  // of fit + hips offsets so:
+  //   meshGroup.position = _meshFitOffset + _hipsOffset + _bodyXform.translate
+  //   meshGroup.rotation =                                _bodyXform.rotate
+  // Survives mesh re-renders the same way fit / hips offsets do.
+  const _bodyXform = {
+    translate: new THREE.Vector3(),
+    rotate:    new THREE.Euler(0, 0, 0, "XYZ"),
+  };
+  let _onBodyTransformChanged = null;
   // Animation bookkeeping (used when the viewer shows an animated FBX clip
   // produced by the video pipeline).
   let mixer = null;
@@ -351,7 +370,17 @@ function initViewer() {
     }
 
     _disposeMesh();
-    meshGroup = root;
+
+    // Wrap the OBJ root in a body-anchor so the right-toolbar gizmo
+    // (translate / rotate) pivots around the body's visual centre.
+    // The wrapper holds the height-scale + world placement; the inner
+    // mesh is shifted by ``-_meshLocalCenter`` so its bbox centre sits
+    // at the wrapper's local origin (mirrors Pose Editor +).
+    const wrapper = new THREE.Group();
+    wrapper.name = "_body_anchor";
+    wrapper.add(root);
+    meshGroup = wrapper;
+    _meshInner = root;
 
     // First render of this job → measure & cache the height-fit / center /
     // ground offset. Same job re-renders → reuse cached values so IK or
@@ -360,29 +389,38 @@ function initViewer() {
     // an arm IK drag). Hips drag offset (if any) is added on top.
     const targetHeight = 1.7;
     if (jobId !== _meshFitJob) {
+      // Measure the unscaled bbox (wrapper at scale 1, mesh at default).
       const box = new THREE.Box3().setFromObject(root);
       const size = new THREE.Vector3();
       box.getSize(size);
       const scale = targetHeight / Math.max(size.y, 1e-3);
-      root.scale.setScalar(scale);
-      const centered = new THREE.Box3().setFromObject(root);
       const center = new THREE.Vector3();
-      centered.getCenter(center);
-      root.position.x -= center.x;
-      root.position.z -= center.z;
-      root.position.y -= centered.min.y;
+      box.getCenter(center);
+
       _meshFitJob = jobId;
       _meshFitScale = scale;
-      _meshFitOffset.copy(root.position);
-      // New job → wipe any prior Hips translation so the new character
-      // doesn't inherit the previous body's drag offset.
+      _meshLocalCenter.copy(center);
+      // After applying scale on the wrapper, the body height is
+      // ``size.y * scale``. Half-height is the wrapper's world Y so
+      // feet land at y=0.
+      _meshFitOffset.set(0, (size.y * scale) / 2, 0);
+      // New job → wipe any prior Hips translation so the new body
+      // doesn't inherit the previous body's drag offset. Same goes for
+      // the manual body-anchor transform — a fresh inference starts at
+      // identity so the user sees the freshly-centered cohort, not a
+      // translated one from the previous photo.
       _hipsOffset.set(0, 0, 0);
-    } else {
-      root.scale.setScalar(_meshFitScale);
-      root.position.copy(_meshFitOffset).add(_hipsOffset);
+      _bodyXform.translate.set(0, 0, 0);
+      _bodyXform.rotate.set(0, 0, 0);
     }
+    wrapper.scale.setScalar(_meshFitScale);
+    root.position.copy(_meshLocalCenter).multiplyScalar(-1);
+    wrapper.position.copy(_meshFitOffset)
+      .add(_hipsOffset)
+      .add(_bodyXform.translate);
+    wrapper.rotation.copy(_bodyXform.rotate);
 
-    scene.add(root);
+    scene.add(wrapper);
 
     // Re-attach the pose-edit overlay so it inherits the new meshGroup's
     // height-fit + centring transforms. Bone handles also need their local
@@ -421,6 +459,14 @@ function initViewer() {
       camera.position.set(0, targetHeight * 0.6, targetHeight * 2.2);
       controls.update();
       framedJob = jobId;
+    }
+    // Re-bind the body-anchor gizmo to the freshly-built meshGroup so
+    // the right-toolbar translate / rotate buttons keep working across
+    // re-renders. Skip while pose-edit is active — IK owns the gizmo.
+    if (!poseEdit.active) {
+      tControls.enabled = true;
+      tControls.attach(meshGroup);
+      _tHelper.visible = true;
     }
     _dirty = true;
   }
@@ -493,7 +539,7 @@ function initViewer() {
 
   // Remove whatever mesh / animation is currently shown and leave the
   // viewport empty. The video tab uses this while a Blender rebuild is in
-  // flight so the stale character doesn't keep playing on top of a
+  // flight so the stale body doesn't keep playing on top of a
   // "rebuilding" status label.
   function clearMesh() {
     _disposeMesh();
@@ -535,7 +581,7 @@ function initViewer() {
   }
 
   // Lines and handles are Euler-auto-scaled to the posed mesh's height so
-  // they stay legible on petite / tall characters.
+  // they stay legible on petite / tall bodies.
   const _poseLineMat  = new THREE.LineBasicMaterial({ color: 0x33aaff, transparent: true, opacity: 0.85, depthTest: false });
   const _poseHandleMat = new THREE.MeshBasicMaterial({ color: 0x33aaff, transparent: true, opacity: 0.9, depthTest: false });
   const _poseHandleHoverMat = new THREE.MeshBasicMaterial({ color: 0xffc84d, transparent: true, opacity: 0.95, depthTest: false });
@@ -612,7 +658,24 @@ function initViewer() {
   });
 
   tControls.addEventListener("change", () => {
-    if (!poseEdit.active) { markDirty(); return; }
+    if (!poseEdit.active) {
+      // Body-anchor binding: gizmo is attached to meshGroup. Decompose
+      // its current position/rotation back into _bodyXform (fit + hips
+      // offsets are immutable, anything beyond them is the user's
+      // manual transform). Fires the change callback so the outer code
+      // can mirror the values into UI / state if it wants.
+      if (meshGroup && tControls.object === meshGroup) {
+        _bodyXform.translate.set(
+          meshGroup.position.x - _meshFitOffset.x - _hipsOffset.x,
+          meshGroup.position.y - _meshFitOffset.y - _hipsOffset.y,
+          meshGroup.position.z - _meshFitOffset.z - _hipsOffset.z,
+        );
+        _bodyXform.rotate.copy(meshGroup.rotation);
+        if (_onBodyTransformChanged) _onBodyTransformChanged();
+      }
+      markDirty();
+      return;
+    }
     // Hips: translate the whole body. Persist the offset into the cached
     // mesh fit so subsequent re-renders (from other settings changes) keep
     // the translation instead of snapping back to the original origin.
@@ -974,8 +1037,16 @@ function initViewer() {
     if (poseEdit.active) return;
     if (!skeleton || !Array.isArray(skeleton.bones)) return;
 
+    // Release any body-anchor binding before claiming the gizmo for IK.
+    // Without this the body's translate/rotate gizmo can swallow the
+    // first drag in pose-edit mode and shift the whole body.
+    if (tControls.object === meshGroup) {
+      tControls.detach();
+      _tHelper.visible = false;
+    }
+
     // Pick a handle radius roughly proportional to the rendered mesh height
-    // so the spheres are legible but don't swamp the character. Computed
+    // so the spheres are legible but don't swamp the body. Computed
     // against the world-space bbox so the visible size is right regardless
     // of meshGroup's local scale; we then divide by meshGroup.scale before
     // assigning so handle.scale (a LOCAL value once parented to meshGroup)
@@ -1006,6 +1077,10 @@ function initViewer() {
     root.add(linesGroup);
 
     // Build bones, first pass: create handles at world positions.
+    // Bones come from the server at raw MHR coords (matching the unshifted
+    // OBJ vertices). The inner mesh is now shifted by ``-_meshLocalCenter``
+    // inside the wrapper, so bone handles must subtract the same offset
+    // to stay aligned with the rendered body vertices.
     poseEdit.bones = [];
     poseEdit.byName = new Map();
     for (const b of skeleton.bones) {
@@ -1015,7 +1090,11 @@ function initViewer() {
         : handleLocalScale;
       handle.scale.setScalar(perBoneScale);
       handle.renderOrder = 1000;
-      handle.position.fromArray(b.world_position);
+      handle.position.set(
+        b.world_position[0] - _meshLocalCenter.x,
+        b.world_position[1] - _meshLocalCenter.y,
+        b.world_position[2] - _meshLocalCenter.z,
+      );
       handle.quaternion.set(
         b.world_quaternion[0], b.world_quaternion[1],
         b.world_quaternion[2], b.world_quaternion[3],
@@ -1108,6 +1187,13 @@ function initViewer() {
     poseEdit.byName = new Map();
     poseEdit.selected = null;
     poseEdit.active = false;
+    // Hand the gizmo back to the body anchor so the user can keep
+    // translating / rotating the whole body after exiting pose-edit.
+    if (meshGroup) {
+      tControls.enabled = true;
+      tControls.attach(meshGroup);
+      _tHelper.visible = true;
+    }
     markDirty();
   }
 
@@ -1168,10 +1254,12 @@ function initViewer() {
       if (poseEdit.onBoneChange) poseEdit.onBoneChange(bone.name, null);
     }
     // Wipe the Hips drag translation too — Reset = full restore to the
-    // initial fit pose. Snap the meshGroup back to the fit anchor.
+    // initial fit pose. Snap the meshGroup back to the fit anchor while
+    // preserving the user's body-anchor (translate / rotate) state, so
+    // "Reset all bones" doesn't undo a deliberate body offset.
     _hipsOffset.set(0, 0, 0);
     if (meshGroup) {
-      meshGroup.position.copy(_meshFitOffset);
+      meshGroup.position.copy(_meshFitOffset).add(_bodyXform.translate);
     }
     // Re-sync the IK gizmo target to the (now-restored) selected bone so
     // it doesn't dangle at the pre-reset world position.
@@ -1239,11 +1327,11 @@ function initViewer() {
   }
 
   // Render-to-PNG-DataURL with a custom background and (optional) crop. Used
-  // by the editor confirm pipeline to produce pose_image / chara_image
+  // by the editor confirm pipeline to produce pose_image / body_preset_image
   // outputs. ``cropRect`` is in canvas BACKING-store pixels (i.e. drawing
   // buffer pixels — already multiplied by devicePixelRatio).
   // ``framing`` is "current" (use the orbit camera as-is) or "fit_full_body"
-  // (frame the body height-fit, ground-aligned, suitable for chara_image).
+  // (frame the body height-fit, ground-aligned, suitable for body_preset_image).
   function captureImage({ bgColor = 0xffffff, cropRect = null, framing = "current" } = {}) {
     const prevClearColor = renderer.getClearColor(new THREE.Color());
     const prevClearAlpha = renderer.getClearAlpha();
@@ -1309,7 +1397,9 @@ function initViewer() {
   // any prior body translation should be discarded.
   function clearHipsTranslation() {
     _hipsOffset.set(0, 0, 0);
-    if (meshGroup) meshGroup.position.copy(_meshFitOffset);
+    if (meshGroup) {
+      meshGroup.position.copy(_meshFitOffset).add(_bodyXform.translate);
+    }
     markDirty();
   }
 
@@ -1321,9 +1411,82 @@ function initViewer() {
   }
   function setHipsOffset(vec3) {
     _hipsOffset.copy(vec3);
-    if (meshGroup) meshGroup.position.copy(_meshFitOffset).add(_hipsOffset);
+    if (meshGroup) {
+      meshGroup.position
+        .copy(_meshFitOffset)
+        .add(_hipsOffset)
+        .add(_bodyXform.translate);
+    }
     markDirty();
   }
+
+  // ---- Body-anchor gizmo: manual translate / rotate of the whole body --
+
+  function setGizmoMode(mode /* "translate" | "rotate" */) {
+    tControls.setMode(mode === "rotate" ? "rotate" : "translate");
+    markDirty();
+  }
+
+  // Re-bind the gizmo to meshGroup. Used by the right-toolbar buttons
+  // (and exit-IK transition) to make the body-anchor draggable again.
+  function bindBodyGizmo() {
+    if (poseEdit.active || !meshGroup) return;
+    tControls.enabled = true;
+    tControls.attach(meshGroup);
+    _tHelper.visible = true;
+    markDirty();
+  }
+  function unbindBodyGizmo() {
+    if (tControls.object === meshGroup) {
+      tControls.detach();
+      _tHelper.visible = false;
+      markDirty();
+    }
+  }
+
+  function getBodyTransform() {
+    return {
+      translate: [_bodyXform.translate.x, _bodyXform.translate.y, _bodyXform.translate.z],
+      rotate_deg: [
+        THREE.MathUtils.radToDeg(_bodyXform.rotate.x),
+        THREE.MathUtils.radToDeg(_bodyXform.rotate.y),
+        THREE.MathUtils.radToDeg(_bodyXform.rotate.z),
+      ],
+    };
+  }
+  function setBodyTransform(translate, rotate_deg) {
+    if (Array.isArray(translate)) {
+      _bodyXform.translate.set(
+        translate[0] || 0, translate[1] || 0, translate[2] || 0,
+      );
+    }
+    if (Array.isArray(rotate_deg)) {
+      _bodyXform.rotate.set(
+        THREE.MathUtils.degToRad(rotate_deg[0] || 0),
+        THREE.MathUtils.degToRad(rotate_deg[1] || 0),
+        THREE.MathUtils.degToRad(rotate_deg[2] || 0),
+        "XYZ",
+      );
+    }
+    if (meshGroup) {
+      meshGroup.position.copy(_meshFitOffset).add(_hipsOffset).add(_bodyXform.translate);
+      meshGroup.rotation.copy(_bodyXform.rotate);
+    }
+    markDirty();
+  }
+  function resetBodyTranslate() {
+    _bodyXform.translate.set(0, 0, 0);
+    if (meshGroup) {
+      meshGroup.position.copy(_meshFitOffset).add(_hipsOffset);
+    }
+    markDirty();
+  }
+  function resetBodyRotate() {
+    _bodyXform.rotate.set(0, 0, 0);
+    if (meshGroup) meshGroup.rotation.set(0, 0, 0);
+    markDirty();
+  }
+  function setOnBodyTransformChanged(cb) { _onBodyTransformChanged = cb || null; }
 
   return {
     loadObj, loadFbxAnimated, savePng, captureImage, switchTab, hasCachedMesh, clearMesh,
@@ -1331,6 +1494,10 @@ function initViewer() {
     resetAllPoseBones, setPoseBoneLocalEuler, getPoseBoneLocalEuler,
     setPoseEditCallbacks, clearHipsTranslation,
     getHipsOffset, setHipsOffset,
+    setGizmoMode, bindBodyGizmo, unbindBodyGizmo,
+    getBodyTransform, setBodyTransform,
+    resetBodyTranslate, resetBodyRotate,
+    setOnBodyTransformChanged,
     isPoseEditActive: () => poseEdit.active,
     getCanvasSize: () => ({ width: canvas.width, height: canvas.height }),
     getCanvasClientSize: () => ({ width: canvas.clientWidth, height: canvas.clientHeight }),
@@ -1474,7 +1641,7 @@ function refreshSlidersFromSettings() {
 // The lean-correction slider lives inside each tab's own panel (image /
 // video), so we wire them up once at boot and keep them in sync with
 // ``tabSettings[tab].pose_adjust.lean_correction``. Unlike the body /
-// bone / blendshape sliders (shared DOM in the Character panel), these
+// bone / blendshape sliders (shared DOM in the Body Preset panel), these
 // are tab-scoped, so no tab-switch sync is needed.
 //
 // Image tab re-renders on ``input`` (cheap OBJ mesh swap), video tab only
@@ -1567,7 +1734,7 @@ function _poseLockSidebar(lock) {
   const toDisable = [
     "file-input", "run-btn",
     "preset-select", "load-preset-btn",
-    "char-json-input",
+    "body-preset-json-input",
     "img-lean-range", "img-lean-num",
   ];
   for (const id of toDisable) {
@@ -1794,10 +1961,14 @@ function initPoseEditUi() {
         // One final render with the drag's last state — in case the last
         // change event was coalesced into an in-flight fetch and its
         // follow-up was skipped because renderDirty was cleared between.
+        // The pose-edit overlay rebuild is DEFERRED to the moment that
+        // render's response arrives (see ``callRender``'s finally) so
+        // the bones snap onto the FRESHEST posed skeleton — a sync
+        // rebuild here would use the previous frame's skeleton and
+        // leave a 1-frame misalignment between bones and mesh.
+        _pendingOverlayRebuild = () =>
+          _rebuildOverlay(settings.pose_adjust?.rotation_overrides);
         scheduleRender();
-        // Rebuild the overlay so any cascade drift accumulated during the
-        // drag is wiped before the next interaction.
-        _rebuildOverlay(settings.pose_adjust?.rotation_overrides);
         _commitPoseOp();
       },
       // IK drag — viewer ran CCD on a parent chain and now needs us to
@@ -1837,6 +2008,10 @@ function initPoseEditUi() {
 
   toggleBtn.addEventListener("click", () => {
     if (poseEditMode) exit(); else enter();
+    // Notify other UI (right-toolbar visibility hook) that pose-edit
+    // mode just toggled. Cheap CustomEvent — no payload needed since
+    // listeners read the latest state from ``viewer.isPoseEditActive()``.
+    document.dispatchEvent(new CustomEvent("sam3d-pose-edit-changed"));
   });
 
   boneSel.addEventListener("change", () => {
@@ -1958,19 +2133,19 @@ function initPoseEditUi() {
   };
 }
 
-// Sync the shared Character-panel DOM (preset dropdown, source info text,
+// Sync the shared Body Preset panel DOM (preset dropdown, source info text,
 // JSON upload label) to the active tab's cached char state.
-function refreshCharPanelFromState() {
+function refreshBodyPresetPanelFromState() {
   const name = document.querySelector(".tab-nav button.active")?.dataset.tab || "image";
-  const state = tabCharState[name];
+  const state = tabBodyPresetState[name];
   if (!state) return;
   presetSelect.value = state.preset ?? "";
-  charSourceInfo.textContent = state.sourceText ?? "";
-  charJsonLabel.textContent =
+  bodyPresetSourceInfo.textContent = state.sourceText ?? "";
+  bodyPresetJsonLabel.textContent =
     state.jsonLabel ??
-    (window.i18n?.t("character.json_drop") || "Upload character JSON (optional)");
+    (window.i18n?.t("body_preset.json_drop") || "Upload body preset JSON (optional)");
   // Clear the <input type="file"> so re-selecting the same file still triggers change.
-  charJsonInput.value = "";
+  bodyPresetJsonInput.value = "";
 }
 
 // True when at least one slider differs from its declared default. Used to
@@ -1994,13 +2169,20 @@ function _settingsNonDefault() {
 
 let renderInFlight = false;
 let renderDirty = false;
+// Pose-edit overlay rebuild deferred to the next render-settle. Set by
+// ``onDragEnd`` (see ``initPoseEditUi``) to a closure that captures the
+// CURRENT pose_adjust state; ``callRender``'s finally invokes it once
+// the queue drains so the rebuild uses the FRESHEST skeleton from the
+// last response — eliminates the 1-frame misalignment a sync rebuild
+// at drag-end-time would leave.
+let _pendingOverlayRebuild = null;
 let debounceTimer = null;
 
 function scheduleRender() {
   // On the video tab, once motion inference has produced a cache we route
   // to /api/build_animated_fbx (animated FBX). Without motion the video
   // tab falls through to /api/render with MAKE_JOB_ID so the viewport
-  // still shows the neutral MHR body with the tab's character settings.
+  // still shows the neutral MHR body with the tab's body preset settings.
   const activeTab = document.querySelector(".tab-nav button.active")?.dataset.tab;
   if (activeTab === "video" && currentMotionId) {
     rebuildAnimatedFbx();
@@ -2037,7 +2219,7 @@ async function triggerRender() {
     // Editor: keep the live confirm-payload up to date with whatever
     // sliders / pose adjust state the user just shipped to the renderer.
     refreshEditorPosePayload();
-    refreshEditorCharaPayload();
+    refreshEditorBodyPresetPayload();
     await viewer.loadObj(j.obj_url, currentJobId);
     // First rendered frame unlocks the PNG save button. Export FBX is
     // image-tab only and gated separately by /api/process success — we
@@ -2057,7 +2239,18 @@ async function triggerRender() {
     renderInfo.textContent = `render error: ${e.message || e}`;
   } finally {
     renderInFlight = false;
-    if (renderDirty) triggerRender();
+    if (renderDirty) {
+      triggerRender();
+    } else if (_pendingOverlayRebuild) {
+      // The drag ended and the render queue has drained. The skeleton
+      // we just received is the freshest one possible; rebuild the
+      // pose-edit overlay against it so IK bones snap exactly onto
+      // the rendered mesh's joint positions (matches Pose Editor +
+      // behaviour, eliminates 1-frame misalignment).
+      const cb = _pendingOverlayRebuild;
+      _pendingOverlayRebuild = null;
+      try { cb(); } catch (e) { console.warn("overlay rebuild failed:", e); }
+    }
   }
 }
 
@@ -2086,25 +2279,25 @@ loadPresetBtn.addEventListener("click", async () => {
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const preset = await r.json();
     applySettingsToUi(preset);
-    const prefix = window.i18n?.t("character.preset_loaded") || "preset applied:";
+    const prefix = window.i18n?.t("body_preset.preset_loaded") || "preset applied:";
     const sourceText = `${prefix} ${name}`;
-    charSourceInfo.textContent = sourceText;
+    bodyPresetSourceInfo.textContent = sourceText;
     // Reset any lingering JSON upload label — picking a preset is the new source.
-    charJsonInput.value = "";
-    const defaultJsonLabel = window.i18n?.t("character.json_drop") || "Upload character JSON (optional)";
-    charJsonLabel.textContent = defaultJsonLabel;
+    bodyPresetJsonInput.value = "";
+    const defaultJsonLabel = window.i18n?.t("body_preset.json_drop") || "Upload body preset JSON (optional)";
+    bodyPresetJsonLabel.textContent = defaultJsonLabel;
     // Persist to the active tab's char state so tab switches restore it.
     const activeTab = document.querySelector(".tab-nav button.active")?.dataset.tab;
-    if (activeTab && tabCharState[activeTab]) {
-      tabCharState[activeTab].preset = name;
-      tabCharState[activeTab].sourceText = sourceText;
-      tabCharState[activeTab].jsonLabel = null;
+    if (activeTab && tabBodyPresetState[activeTab]) {
+      tabBodyPresetState[activeTab].preset = name;
+      tabBodyPresetState[activeTab].sourceText = sourceText;
+      tabBodyPresetState[activeTab].jsonLabel = null;
     }
     scheduleRender();
   } catch (e) { renderInfo.textContent = `load preset failed: ${e.message || e}`; }
 });
 
-// Upload a character JSON → parse → push into settings + sliders → re-render.
+// Upload a body preset JSON → parse → push into settings + sliders → re-render.
 // The uploaded values override the currently-selected preset (whichever
 // source runs last wins; that matches what the user expects).
 async function handleCharJsonFile(file) {
@@ -2116,32 +2309,32 @@ async function handleCharJsonFile(file) {
       throw new Error("JSON must be an object with body_params / bone_lengths / blendshapes");
     }
     applySettingsToUi(parsed);
-    const prefix = window.i18n?.t("character.json_loaded") || "JSON applied:";
+    const prefix = window.i18n?.t("body_preset.json_loaded") || "JSON applied:";
     const sourceText = `${prefix} ${file.name}`;
-    charSourceInfo.textContent = sourceText;
-    charJsonLabel.textContent = file.name;
+    bodyPresetSourceInfo.textContent = sourceText;
+    bodyPresetJsonLabel.textContent = file.name;
     // Deselect any preset — it's been overridden by the upload.
     presetSelect.value = "";
     const activeTab = document.querySelector(".tab-nav button.active")?.dataset.tab;
-    if (activeTab && tabCharState[activeTab]) {
-      tabCharState[activeTab].preset = "";
-      tabCharState[activeTab].sourceText = sourceText;
-      tabCharState[activeTab].jsonLabel = file.name;
+    if (activeTab && tabBodyPresetState[activeTab]) {
+      tabBodyPresetState[activeTab].preset = "";
+      tabBodyPresetState[activeTab].sourceText = sourceText;
+      tabBodyPresetState[activeTab].jsonLabel = file.name;
     }
     scheduleRender();
   } catch (err) {
-    charSourceInfo.textContent = `JSON parse error: ${err.message || err}`;
+    bodyPresetSourceInfo.textContent = `JSON parse error: ${err.message || err}`;
   }
 }
 
-charJsonInput.addEventListener("change", (e) => handleCharJsonFile(e.target.files?.[0]));
+bodyPresetJsonInput.addEventListener("change", (e) => handleCharJsonFile(e.target.files?.[0]));
 ["dragenter", "dragover"].forEach((ev) =>
-  charJsonDrop.addEventListener(ev, (e) => { e.preventDefault(); charJsonDrop.classList.add("dragover"); })
+  bodyPresetJsonDrop.addEventListener(ev, (e) => { e.preventDefault(); bodyPresetJsonDrop.classList.add("dragover"); })
 );
 ["dragleave", "drop"].forEach((ev) =>
-  charJsonDrop.addEventListener(ev, (e) => { e.preventDefault(); charJsonDrop.classList.remove("dragover"); })
+  bodyPresetJsonDrop.addEventListener(ev, (e) => { e.preventDefault(); bodyPresetJsonDrop.classList.remove("dragover"); })
 );
-charJsonDrop.addEventListener("drop", (e) => {
+bodyPresetJsonDrop.addEventListener("drop", (e) => {
   const f = e.dataTransfer?.files?.[0];
   if (f) handleCharJsonFile(f);
 });
@@ -2155,17 +2348,17 @@ resetBtn.addEventListener("click", () => {
     }
   }
   // Reset is make-tab only (button is inside data-tab-show="make"). Clear
-  // the make tab's preset/JSON source too so the Character panel truthfully
+  // the make tab's preset/JSON source too so the Body Preset panel truthfully
   // reflects "no source".
   presetSelect.value = "";
-  charSourceInfo.textContent = "";
-  charJsonInput.value = "";
-  charJsonLabel.textContent =
-    window.i18n?.t("character.json_drop") || "Upload character JSON (optional)";
-  if (tabCharState.make) {
-    tabCharState.make.preset = "";
-    tabCharState.make.sourceText = "";
-    tabCharState.make.jsonLabel = null;
+  bodyPresetSourceInfo.textContent = "";
+  bodyPresetJsonInput.value = "";
+  bodyPresetJsonLabel.textContent =
+    window.i18n?.t("body_preset.json_drop") || "Upload body preset JSON (optional)";
+  if (tabBodyPresetState.make) {
+    tabBodyPresetState.make.preset = "";
+    tabBodyPresetState.make.sourceText = "";
+    tabBodyPresetState.make.jsonLabel = null;
   }
   scheduleRender();
 });
@@ -2278,8 +2471,8 @@ const INFERENCE_LOCK_IDS = [
   "pack-new-name", "pack-clone-btn",
   "pack-delete-btn",
   "fbx-input", "fbx-rebuild-btn",
-  // Character section (shared)
-  "preset-select", "load-preset-btn", "char-json-input",
+  // Body Preset section (shared)
+  "preset-select", "load-preset-btn", "body-preset-json-input",
   // The other tab's run button (one-of-two should always be locked).
   "run-btn", "video-run-btn",
 ];
@@ -2301,7 +2494,7 @@ function lockUiForInference(activeRunBtn) {
     _inferenceSavedDisabled["__tab__" + b.dataset.tab] = b.disabled;
     if (!b.classList.contains("active")) b.disabled = true;
   });
-  // Dynamic Character sliders (Make tab) — created at runtime, so disable
+  // Dynamic Body Preset sliders (Make tab) — created at runtime, so disable
   // the entire container's form controls in one sweep. We don't bother
   // saving prior state: these sliders aren't selectively disabled outside
   // of inference, so the unlock side just re-enables them all.
@@ -2429,7 +2622,7 @@ runBtn.addEventListener("click", async () => {
     };
     refreshEditorPosePayload();
     runInfo.textContent = window.i18n?.t("input.done") || "推定終了";
-    characterUnlocked = true;
+    bodyPresetUnlocked = true;
     // Fresh pose estimation arrived → discard any prior pose adjustments
     // (rotation overrides + Hips translation). The previous bone tree was
     // tied to the OLD pose; carrying its rotations into the new one would
@@ -2446,7 +2639,7 @@ runBtn.addEventListener("click", async () => {
     viewer.clearHipsTranslation();
     if (window.__resetPoseUndoHistory) window.__resetPoseUndoHistory();
     // Inference landed — unlock the image-tab FBX download and re-render
-    // the now-posed body with whatever character the user was viewing.
+    // the now-posed body with whatever body preset the user was viewing.
     exportFbxBtn.hidden = false;
     exportBvhBtn.hidden = false;
     const poseEditToggleBtn = document.getElementById("pose-edit-toggle-btn");
@@ -2637,7 +2830,7 @@ const videoDownloadBvhBtn = $("video-download-bvh-btn");
 const videoDownloadInfo = $("video-download-info");
 const videoDownloadBvhInfo = $("video-download-bvh-info");
 let selectedVideo = null;
-// Motion cache id returned by /api/infer_motion. While set, character
+// Motion cache id returned by /api/infer_motion. While set, body preset
 // tweaks re-run /api/build_animated_fbx instead of the pose/image pipeline.
 let currentMotionId = null;
 // Most recent animated-FBX URL (for the Download button).
@@ -2683,7 +2876,7 @@ videoDrop.addEventListener("drop", (e) => {
 
 // Phase 1: "モーションを推定" — runs only the slow segmentation + pose pass
 // and caches the raw per-frame params. Phase 2 (FBX build) is triggered
-// immediately afterward with the currently-selected character settings
+// immediately afterward with the currently-selected body preset settings
 // so the user sees the rig animate right away; subsequent preset/JSON
 // changes call only Phase 2.
 videoRunBtn.addEventListener("click", async () => {
@@ -2714,7 +2907,7 @@ videoRunBtn.addEventListener("click", async () => {
     currentMotionId = j.motion_id;
     videoRunInfo.textContent = window.i18n?.t("video.done") || "推定終了";
     // Motion is cached — immediately bake and loop the animation on top of
-    // the character the user was already viewing (default MHR body before
+    // the body the user was already viewing (default MHR body before
     // any preset change, or their chosen preset / uploaded JSON).
     await rebuildAnimatedFbx(signal);
   } catch (e) {
@@ -2730,7 +2923,7 @@ videoRunBtn.addEventListener("click", async () => {
 });
 
 // Phase 2: (re)build the animated FBX for the cached motion using the
-// current Character settings. Called after motion inference completes and
+// current Body Preset settings. Called after motion inference completes and
 // again whenever the user swaps preset/JSON while on the video tab. An
 // optional AbortSignal plumbs the main-run cancel button through to Phase 2.
 async function rebuildAnimatedFbx(signal = null) {
@@ -2743,7 +2936,7 @@ async function rebuildAnimatedFbx(signal = null) {
   // the Blender subprocess grinds (~10-30s per rebuild).
   videoRunInfo.textContent =
     window.i18n?.t("video.rebuilding") || "rebuilding FBX…";
-  // Clear the viewport so the stale character doesn't keep animating on top
+  // Clear the viewport so the stale body doesn't keep animating on top
   // of the "rebuilding" status. Re-populated when the new FBX lands.
   viewer.clearMesh();
   _setVideoBusy(true);
@@ -2751,7 +2944,7 @@ async function rebuildAnimatedFbx(signal = null) {
     const t0 = performance.now();
     const payload = {
       motion_id: currentMotionId,
-      // Always bake the VIDEO tab's cached character — not whichever tab
+      // Always bake the VIDEO tab's cached body preset — not whichever tab
       // happens to be active when the recursion in `finally` fires.
       settings: tabSettings.video,
       root_motion_mode: $("video-root-mode").value,
@@ -2881,8 +3074,8 @@ document.getElementById("save-render-btn")?.addEventListener("click", async () =
   }
 });
 
-// Character Make tab: download the current slider values as a standalone
-// character JSON (same schema as chara_settings_presets/*.json, drop-in
+// Body Preset tab: download the current slider values as a standalone
+// body preset JSON (same schema as body_preset_settings/*.json, drop-in
 // compatible with Preset Pack's Load menu).
 document.getElementById("make-download-btn")?.addEventListener("click", () => {
   // Download the make tab's cached parameters explicitly — settings still
@@ -2894,7 +3087,7 @@ document.getElementById("make-download-btn")?.addEventListener("click", () => {
   const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `character_${stamp}.json`;
+  a.download = `body_preset_${stamp}.json`;
   document.body.appendChild(a);
   a.click();
   a.remove();
@@ -2952,7 +3145,7 @@ boot();
 // Editor confirm-payload glue.
 //
 // editor_init.js reads ``window.__sam3dPosePayload`` /
-// ``window.__sam3dCharaPayload`` when the user clicks "Confirm & Close".
+// ``window.__sam3dBodyPresetPayload`` when the user clicks "Confirm & Close".
 // Snapshot live state from app.js's globals here so we don't have to
 // thread an extra channel through the original module.
 // ---------------------------------------------------------------------------
@@ -2966,7 +3159,7 @@ function refreshEditorPosePayload() {
   const imageSlot = tabSettings.image || {};
   const adjust = imageSlot.pose_adjust || {};
   // FLAT layout — key-compatible with SAM3DBodyProcessToJson's output
-  // so SAM3DBodyRenderFromPoseAndCharaJson reads the editor's pose
+  // so SAM3DBodyRenderFromPoseAndBodyPresetJson reads the editor's pose
   // exactly the same way as the legacy in-graph pose node.
   // Two field renames vs. /sam3d/api/process's response:
   //   pred_cam_t        -> camera
@@ -2995,9 +3188,9 @@ function refreshEditorPosePayload() {
   };
 }
 
-function refreshEditorCharaPayload() {
+function refreshEditorBodyPresetPayload() {
   const m = tabSettings.make || {};
-  window.__sam3dCharaPayload = {
+  window.__sam3dBodyPresetPayload = {
     body_params:  { ...(m.body_params  || {}) },
     bone_lengths: { ...(m.bone_lengths || {}) },
     blendshapes:  { ...(m.blendshapes  || {}) },
@@ -3007,7 +3200,7 @@ function refreshEditorCharaPayload() {
 // First snapshot once boot() has had a chance to populate tabSettings.
 setTimeout(() => {
   refreshEditorPosePayload();
-  refreshEditorCharaPayload();
+  refreshEditorBodyPresetPayload();
 }, 100);
 
 // ---------------------------------------------------------------------------
@@ -3016,7 +3209,7 @@ setTimeout(() => {
 //
 // Lives at the tail of editor_core.js so all module-level state (viewer,
 // selectedFile, refreshEditorPosePayload, ...) is already in scope. Every
-// hook checks for the existence of its DOM element so character_editor.html
+// hook checks for the existence of its DOM element so body_preset_editor.html
 // — which doesn't expose these controls — silently no-ops.
 // ---------------------------------------------------------------------------
 (function initPoseImageRangeUi() {
@@ -3272,24 +3465,28 @@ setTimeout(() => {
       const key = state.rangeMode ? "viewport.range_exit" : "viewport.range_enter";
       rangeBtn.dataset.i18n = key;
       rangeBtn.textContent = window.i18n?.t(key) ||
-        (state.rangeMode ? "画像範囲指定を終了" : "画像範囲");
+        (state.rangeMode ? "決定" : "画像範囲");
     }
     if (rangeResetBtn) {
-      // Reset is dimmed when there's nothing saved to clear.
+      // Reset is visible whenever a saved range exists OR mode is on (so
+      // the user can wipe a half-drawn rect mid-mode). Disabled state is
+      // kept consistent with the saved rect availability.
+      rangeResetBtn.hidden = !(state.rect || state.rangeMode);
       rangeResetBtn.disabled = !state.rect;
     }
   }
 
-  // Hide the red rect from the viewport WITHOUT touching ``state.rect``.
-  // Used when leaving range-select mode — the saved range stays in state
-  // so re-entering the mode can re-render it.
+  // Hide the red rect from the viewport AND clear ``state.rect``.
+  // Used by the reset button so the next confirm captures the full
+  // viewport again.
   function hideRectVisual() {
     if (rangeRect) rangeRect.hidden = true;
   }
 
-  // Re-draw the saved client rect (if any) in the overlay. Called when
-  // entering range-select mode so the user sees what they previously
-  // confirmed instead of an empty viewport.
+  // Re-draw the saved client rect (if any) in the overlay. Called both
+  // on mode entry (so the user sees what they previously confirmed) AND
+  // on mode exit (so the saved rect remains visible as a red marker —
+  // mirrors the Pose Editor + behaviour).
   function redrawSavedRect() {
     if (!rangeRect) return;
     if (!state.rectClient) {
@@ -3307,13 +3504,11 @@ setTimeout(() => {
   function setRangeMode(on) {
     state.rangeMode = !!on;
     document.body.classList.toggle("range-select-mode", state.rangeMode);
-    if (state.rangeMode) {
-      // Re-show the previously saved rect (if any).
-      redrawSavedRect();
-    } else {
-      // Leave the saved rect intact; just hide the overlay.
-      hideRectVisual();
-    }
+    // Always reflect the saved rect (if any) on screen — both during
+    // range-select mode (so the user sees their previous rect to refine)
+    // and after exiting (so the captured area stays visually marked
+    // until the user explicitly resets it).
+    redrawSavedRect();
     updateRangeButtonLabel();
   }
 
@@ -3328,7 +3523,7 @@ setTimeout(() => {
     // Also stash the BACKING-store rect for capture time.
     state.rect = clientRectToBacking(client);
     state.rectClient = { ...client };
-    if (rangeResetBtn) rangeResetBtn.disabled = !state.rect;
+    updateRangeButtonLabel();
     void vp;  // (vp unused — kept for reference; client coords are overlay-relative)
   }
 
@@ -3368,6 +3563,7 @@ setTimeout(() => {
         state.rectClient = null;
         if (rangeRect) rangeRect.hidden = true;
       }
+      updateRangeButtonLabel();
     };
     rangeOverlay.addEventListener("pointerup", endDrag);
     rangeOverlay.addEventListener("pointercancel", endDrag);
@@ -3388,6 +3584,8 @@ setTimeout(() => {
       hideRectVisual();
       updateRangeButtonLabel();
     });
+    // Initial state: nothing saved, not in mode → hide entirely.
+    rangeResetBtn.hidden = true;
     rangeResetBtn.disabled = true;
   }
 
@@ -3407,7 +3605,7 @@ setTimeout(() => {
   window.__sam3dGetInputImage = function () {
     return state.inputImage;
   };
-  window.__sam3dCaptureCharaImage = function () {
+  window.__sam3dCaptureBodyPresetImage = function () {
     if (!viewer || !viewer.captureImage) return null;
     const cap = viewer.captureImage({
       bgColor: 0xffffff,
@@ -3416,4 +3614,75 @@ setTimeout(() => {
     });
     return cap;
   };
+})();
+
+// ---------------------------------------------------------------------------
+// Body-anchor right-toolbar wiring (translate / rotate gizmo, resets, image
+// preview overlay). Hidden while pose-edit (IK) mode is active so the
+// gizmo binding can switch over to bones without conflicting controls.
+// ---------------------------------------------------------------------------
+(function initBodyAnchorToolbar() {
+  const tb       = document.querySelector(".viewport-toolbar");
+  const trBtn    = document.getElementById("gizmo-translate-btn");
+  const rotBtn   = document.getElementById("gizmo-rotate-btn");
+  const rstTr    = document.getElementById("reset-translate-btn");
+  const rstRot   = document.getElementById("reset-rotate-btn");
+  const imgBtn   = document.getElementById("toggle-img-btn");
+  const overlay  = document.getElementById("image-display-overlay");
+  const overlayImg = document.getElementById("image-display-img");
+  const toggleBtn = document.getElementById("pose-edit-toggle-btn");
+  if (!tb || !trBtn || !rotBtn) return;
+
+  let _gizmoMode = "translate";
+  function setGizmoMode(mode) {
+    _gizmoMode = mode === "rotate" ? "rotate" : "translate";
+    if (viewer.setGizmoMode) viewer.setGizmoMode(_gizmoMode);
+    trBtn.classList.toggle("active",  _gizmoMode === "translate");
+    rotBtn.classList.toggle("active", _gizmoMode === "rotate");
+  }
+
+  trBtn.addEventListener("click", () => setGizmoMode("translate"));
+  rotBtn.addEventListener("click", () => setGizmoMode("rotate"));
+  if (rstTr)  rstTr.addEventListener("click",  () => viewer.resetBodyTranslate?.());
+  if (rstRot) rstRot.addEventListener("click", () => viewer.resetBodyRotate?.());
+
+  // Input-image overlay toggle. Reads ``state.inputImage.dataUrl`` from
+  // the pose-image module's shared state so the thumbnail mirrors the
+  // currently-loaded source picture.
+  let _imgOverlayOn = false;
+  function _refreshOverlayContent() {
+    if (!overlay || !overlayImg) return;
+    const cap = window.__sam3dGetInputImage?.();
+    if (cap && cap.dataUrl) {
+      overlayImg.src = cap.dataUrl;
+      overlay.classList.toggle("visible", _imgOverlayOn);
+    } else {
+      overlay.classList.remove("visible");
+    }
+  }
+  if (imgBtn && overlay) {
+    imgBtn.addEventListener("click", () => {
+      _imgOverlayOn = !_imgOverlayOn;
+      imgBtn.classList.toggle("active", _imgOverlayOn);
+      _refreshOverlayContent();
+    });
+  }
+  // The shared input-image state is updated asynchronously when the user
+  // drops or selects a file — refresh the thumbnail src each time the
+  // window regains focus (cheap heuristic) and on a slow timer so the
+  // overlay stays in sync without a dedicated callback.
+  setInterval(_refreshOverlayContent, 1000);
+
+  // Hide the toolbar (and overlay) while pose-edit mode is active. The
+  // pose-edit toggle button is the only entrypoint to the mode in the
+  // single-person editor; ``initPoseEditUi`` dispatches the
+  // ``sam3d-pose-edit-changed`` CustomEvent right after flipping the
+  // state, so we just listen and refresh.
+  function _refreshToolbarVisibility() {
+    const ikActive = !!viewer.isPoseEditActive?.();
+    tb.style.display = ikActive ? "none" : "flex";
+    if (overlay && ikActive) overlay.classList.remove("visible");
+  }
+  document.addEventListener("sam3d-pose-edit-changed", _refreshToolbarVisibility);
+  _refreshToolbarVisibility();
 })();

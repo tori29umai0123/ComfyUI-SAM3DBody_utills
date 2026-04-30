@@ -2,7 +2,7 @@
 
     presets/face_blendshapes.npz  (produced by extract_face_blendshapes.py)
            │
-           ├─► chara_settings_presets/*.json
+           ├─► body_preset_settings/*.json
            │       Adds missing blend-shape keys (value = 0.0), removes
            │       keys that are no longer in the FBX.
            │
@@ -56,7 +56,7 @@ def _active_pack_dir() -> Path:
 
 _PACK_DIR = _active_pack_dir()
 _NPZ_PATH = _PACK_DIR / "face_blendshapes.npz"
-_PRESETS_DIR = _PACK_DIR / "chara_settings_presets"
+_PRESETS_DIR = _PACK_DIR / "body_preset_settings"
 _PROCESS_PY = _REPO_ROOT / "nodes" / "processing" / "process.py"
 
 

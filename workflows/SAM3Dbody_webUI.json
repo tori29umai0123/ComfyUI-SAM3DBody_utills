@@ -40,7 +40,7 @@
     },
     {
       "id": 134,
-      "type": "SAM3DBodyRenderFromPoseAndCharaJson",
+      "type": "SAM3DBodyRenderFromPoseAndBodyPresetJson",
       "pos": [
         863.5512918187882,
         -750.2589637978243
@@ -73,10 +73,10 @@
           "link": 440
         },
         {
-          "name": "chara_json",
+          "name": "body_preset_json",
           "type": "STRING",
           "widget": {
-            "name": "chara_json"
+            "name": "body_preset_json"
           },
           "link": 441
         }
@@ -94,7 +94,7 @@
       "properties": {
         "aux_id": "tori29umai0123/ComfyUI-SAM3DBody_utills",
         "ver": "0de650cee18b821369cd98fe43dfcd8e3e5f8a10",
-        "Node name for S&R": "SAM3DBodyRenderFromPoseAndCharaJson"
+        "Node name for S&R": "SAM3DBodyRenderFromPoseAndBodyPresetJson"
       },
       "widgets_values": [
         "{}",
@@ -237,7 +237,7 @@
     },
     {
       "id": 136,
-      "type": "SAM3DBodyCharacterEditor",
+      "type": "SAM3DBodyBodyPresetEditor",
       "pos": [
         66.39432319614966,
         -690.759785888323
@@ -252,14 +252,14 @@
       "inputs": [],
       "outputs": [
         {
-          "name": "chara_json",
+          "name": "body_preset_json",
           "type": "STRING",
           "links": [
             441
           ]
         },
         {
-          "name": "chara_image",
+          "name": "body_preset_image",
           "type": "IMAGE",
           "links": null
         }
@@ -267,7 +267,7 @@
       "properties": {
         "aux_id": "tori29umai0123/ComfyUI-SAM3DBody_utills",
         "ver": "0de650cee18b821369cd98fe43dfcd8e3e5f8a10",
-        "Node name for S&R": "SAM3DBodyCharacterEditor"
+        "Node name for S&R": "SAM3DBodyBodyPresetEditor"
       },
       "widgets_values": [
         "{\"body_params\":{\"fat\":-0.8,\"muscle\":0,\"fat_muscle\":0,\"limb_girth\":0,\"limb_muscle\":0,\"limb_fat\":0,\"chest_shoulder\":0,\"waist_hip\":0,\"thigh_calf\":0},\"bone_lengths\":{\"torso\":0.7,\"neck\":1,\"arm\":0.8,\"leg\":0.8},\"blendshapes\":{\"face_big\":0,\"face_small\":0,\"face_mangabig\":0.24,\"face_manga\":0.61,\"chin_sharp\":0.2,\"face_wide\":0.15,\"neck_thick\":0,\"neck_thin\":0.5,\"breast_full\":0,\"breast_flat\":0.87,\"chest_slim\":0,\"shoulder_wide\":0.3,\"shoulder_narrow\":0.5,\"shoulder_slope\":0.5,\"waist_slim\":0,\"limb_thick\":0,\"limb_thin\":0,\"hand_big\":0,\"foot_big\":0,\"MuscleScale\":0}}",

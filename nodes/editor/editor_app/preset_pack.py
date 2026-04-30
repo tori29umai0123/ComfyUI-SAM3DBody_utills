@@ -27,7 +27,7 @@ log = logging.getLogger(__name__)
 class PresetPackPaths:
     pack_dir: Path
     npz_path: Path
-    chara_settings_dir: Path
+    body_preset_settings_dir: Path
 
 
 def active_pack_paths() -> PresetPackPaths:
@@ -35,7 +35,7 @@ def active_pack_paths() -> PresetPackPaths:
     return PresetPackPaths(
         pack_dir=pack_dir,
         npz_path=pack_dir / "face_blendshapes.npz",
-        chara_settings_dir=pack_dir / "chara_settings_presets",
+        body_preset_settings_dir=pack_dir / "body_preset_settings",
     )
 
 
@@ -46,7 +46,7 @@ def _valid_name(name: str) -> bool:
 
 
 def list_presets() -> list[str]:
-    d = active_pack_paths().chara_settings_dir
+    d = active_pack_paths().body_preset_settings_dir
     if not d.is_dir():
         return []
     return sorted(p.stem for p in d.glob("*.json") if p.is_file())
@@ -55,7 +55,7 @@ def list_presets() -> list[str]:
 def load_preset(name: str) -> dict[str, Any]:
     if not _valid_name(name):
         raise ValueError(f"invalid preset name: {name!r}")
-    p = active_pack_paths().chara_settings_dir / f"{name}.json"
+    p = active_pack_paths().body_preset_settings_dir / f"{name}.json"
     if not p.is_file():
         raise FileNotFoundError(str(p))
     with p.open("r", encoding="utf-8") as f:

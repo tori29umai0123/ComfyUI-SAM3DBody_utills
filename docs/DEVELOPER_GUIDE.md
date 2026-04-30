@@ -144,7 +144,7 @@ Blender で FBX を編集 → 保存 → この 2 本を走らせる → ComfyUI
 
 ## Preset packs (ブレンドシェイプ定義の切替 / 配布)
 
-このプラグインは、ブレンドシェイプ定義・頂点マップ・キャラクタープリセット JSON を **preset pack** という単位でまとめて管理します。ユーザーがオリジナルのブレンドシェイプ集を作って公開・配布できるようにするための仕組みです。
+このプラグインは、ブレンドシェイプ定義・頂点マップ・ボディプリセット JSON を **preset pack** という単位でまとめて管理します。ユーザーがオリジナルのブレンドシェイプ集を作って公開・配布できるようにするための仕組みです。
 
 ### pack の切替
 
@@ -161,7 +161,7 @@ Blender で FBX を編集 → 保存 → この 2 本を走らせる → ComfyUI
 1. `presets/default/` を `presets/my_pack/` にコピー
 2. `config.ini` の `[active] pack` を `my_pack` に変更
 3. `tools/bone_backup/all_parts_bs.fbx` を Blender で開き、独自のブレンドシェイプを追加・編集
-4. `tools/extract_face_blendshapes.py` を実行 — active pack (`my_pack`) の下に `face_blendshapes.npz` が更新され、`chara_settings_presets/*.json` と `process.py` の UI 順序も自動同期
+4. `tools/extract_face_blendshapes.py` を実行 — active pack (`my_pack`) の下に `face_blendshapes.npz` が更新され、`body_preset_settings/*.json` と `process.py` の UI 順序も自動同期
 5. 必要なら `tools/rebuild_vertex_jsons.py` で `mhr_reference_vertices.json` も再生成
 6. `presets/my_pack/` フォルダ全体を zip して配布
 

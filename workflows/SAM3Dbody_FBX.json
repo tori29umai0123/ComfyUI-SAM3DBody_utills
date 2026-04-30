@@ -452,10 +452,10 @@
           "link": 439
         },
         {
-          "name": "character_json",
+          "name": "body_preset_json",
           "type": "STRING",
           "widget": {
-            "name": "character_json"
+            "name": "body_preset_json"
           },
           "link": 443
         },
@@ -484,7 +484,7 @@
         "cnr_id": "comfyui-sam3dbody_utills"
       },
       "widgets_values": [
-        "{\n  \"_slot\": \"=== CHARACTER JSON ===\",\n  \"_hint\": \"Paste Render node's settings_json output here.\",\n  \"body_params\":   {},\n  \"bone_lengths\":  {},\n  \"blendshapes\":   {}\n}",
+        "{\n  \"_slot\": \"=== BODY PRESET JSON ===\",\n  \"_hint\": \"Paste Render node's settings_json output here.\",\n  \"body_params\":   {},\n  \"bone_lengths\":  {},\n  \"blendshapes\":   {}\n}",
         "{\n  \"_slot\": \"=== POSE JSON ===\",\n  \"_hint\": \"Paste Process Image to Pose JSON output here.\",\n  \"body_pose_params\": null,\n  \"hand_pose_params\": null,\n  \"global_rot\":       null\n}",
         "C:/Program Files/Blender Foundation/Blender 4.1/blender.exe",
         "sam3d_rigged.fbx"
@@ -492,7 +492,7 @@
     },
     {
       "id": 144,
-      "type": "SAM3DBodyRenderFromPoseAndCharaJson",
+      "type": "SAM3DBodyRenderFromPoseAndBodyPresetJson",
       "pos": [
         863.5512918187882,
         -750.2589637978243
@@ -525,10 +525,10 @@
           "link": 428
         },
         {
-          "name": "chara_json",
+          "name": "body_preset_json",
           "type": "STRING",
           "widget": {
-            "name": "chara_json"
+            "name": "body_preset_json"
           },
           "link": 447
         }
@@ -547,7 +547,7 @@
       "properties": {
         "aux_id": "tori29umai0123/ComfyUI-SAM3DBody_utills",
         "ver": "0de650cee18b821369cd98fe43dfcd8e3e5f8a10",
-        "Node name for S&R": "SAM3DBodyRenderFromPoseAndCharaJson"
+        "Node name for S&R": "SAM3DBodyRenderFromPoseAndBodyPresetJson"
       },
       "widgets_values": [
         "{}",
@@ -564,7 +564,7 @@
     },
     {
       "id": 143,
-      "type": "SAM3DBodySettingCharaJson",
+      "type": "SAM3DBodySettingBodyPresetJson",
       "pos": [
         287.92238643975895,
         -752.1090262838887
@@ -579,7 +579,7 @@
       "inputs": [],
       "outputs": [
         {
-          "name": "chara_json",
+          "name": "body_preset_json",
           "type": "STRING",
           "slot_index": 0,
           "links": [
@@ -591,7 +591,7 @@
       "properties": {
         "aux_id": "tori29umai0123/ComfyUI-SAM3DBody_utills",
         "ver": "0de650cee18b821369cd98fe43dfcd8e3e5f8a10",
-        "Node name for S&R": "SAM3DBodySettingCharaJson"
+        "Node name for S&R": "SAM3DBodySettingBodyPresetJson"
       },
       "widgets_values": [
         "female",

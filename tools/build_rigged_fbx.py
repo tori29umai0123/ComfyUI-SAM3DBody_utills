@@ -10,7 +10,7 @@ automatically; running by hand is only useful for debugging.
 
 Package JSON schema:
     output_path         : str
-    rest_verts          : [V, 3] — MHR native, final character rest mesh
+    rest_verts          : [V, 3] — MHR native, final body rest mesh
     faces               : [F, 3] — triangle indices
     joint_parents       : [J]    — parent index per joint (-1 = root)
     joint_names         : [J]    — bone names
@@ -183,7 +183,7 @@ def main():
     mesh.from_pydata(verts, [], faces)
     mesh.update()
 
-    mesh_obj = bpy.data.objects.new("SAM3D_Character", mesh)
+    mesh_obj = bpy.data.objects.new("SAM3D_Body", mesh)
     bpy.context.collection.objects.link(mesh_obj)
     mesh_obj.parent = arm_obj
 

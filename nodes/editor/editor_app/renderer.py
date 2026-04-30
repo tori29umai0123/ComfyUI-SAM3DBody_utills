@@ -17,7 +17,7 @@ from typing import Any
 import numpy as np
 import torch
 
-from . import character_shape as cs
+from . import body_preset_shape as cs
 from . import paths as _paths
 from . import pose_session
 from .obj_export import write_obj
@@ -219,68 +219,48 @@ def _build_humanoid_skeleton(
     return {"bones": bones}
 
 
-def render_from_session(
-    job_id: str,
-    settings: dict[str, Any] | None,
-) -> RenderResult:
-    """Build a mesh for ``job_id`` with the given slider values and write an
-    OBJ under ``output/``. Reuses the cached SAM3DBody model + pose session.
+def normalise_settings(settings: dict[str, Any] | None) -> dict[str, Any]:
+    """Public alias for the slider-settings normaliser.
 
-    The reserved ``MAKE_JOB_ID`` renders the MHR neutral body in T-pose and
-    is used by the Character Make tab — we auto-create it on first request
-    so it stays available even if LRU eviction ever drops it."""
-    t0 = time.monotonic()
-    if job_id == pose_session.MAKE_JOB_ID:
-        sess = pose_session.ensure_make_session()
-    else:
-        sess = pose_session.get(job_id)
-        if sess is None:
-            raise KeyError(f"no pose session for job_id {job_id!r}")
+    plus_renderer needs the same defaulting / validation logic so the cache
+    key and the resulting mesh stay in sync between single- and multi-person
+    paths. Behaviour is identical to the long-standing internal helper.
+    """
+    return _normalise_settings(settings)
 
-    s = _normalise_settings(settings)
-    bundle = load_bundle()
-    model = bundle.model
-    device = torch.device(bundle.device)
-    mhr_head = model.head_pose
 
-    # Short-circuit on cache hit: skip MHR forward + all post-processing,
-    # just re-write tmp/mesh.obj from the memoized vertices. This is the
-    # hot path for slider drags that jitter between a few close values.
-    faces = mhr_head.faces.detach().cpu().numpy()
-    cache_key = _render_cache_key(job_id, s)
-    cached = _render_cache_get(cache_key)
-    if cached is not None:
-        cached_verts, cached_skeleton = cached
-        render_id = uuid.uuid4().hex[:8]
-        obj_path = _paths.tmp_dir() / "mesh.obj"
-        write_obj(
-            obj_path, cached_verts, faces,
-            header=f"# sam3dbody job {job_id} render {render_id} (cached)",
-        )
-        obj_url = _paths.tmp_url("mesh.obj", version=render_id)
-        elapsed = time.monotonic() - t0
-        log.info("render job=%s render=%s CACHED elapsed=%.3fs", job_id, render_id, elapsed)
-        return RenderResult(
-            job_id=job_id,
-            obj_url=obj_url,
-            obj_path=str(obj_path),
-            elapsed_sec=elapsed,
-            settings=s,
-            humanoid_skeleton=cached_skeleton,
-        )
+def compute_session_mesh(
+    sess: pose_session.PoseSession,
+    settings: dict[str, Any],
+    *,
+    bundle=None,
+    device: torch.device | None = None,
+    suppress_lean: bool = False,
+) -> tuple[np.ndarray, dict[str, Any] | None]:
+    """Run the full single-session deform stack and return ``(vertices, humanoid_skeleton)``.
 
-    # Pose adjust (lean correction) is applied AFTER mhr_forward by
-    # rotating the spine→neck chain; nothing to do to global_rot here.
-    if job_id == pose_session.MAKE_JOB_ID:
-        lean_strength = 0.0
-    else:
-        lean_strength = float(s["pose_adjust"].get("lean_correction", 0.0))
+    ``settings`` must be the pre-normalised dict produced by
+    ``normalise_settings`` — callers that pass a raw frontend payload should
+    normalise first so the caller-side cache key matches the renderer's view
+    of the inputs. ``suppress_lean=True`` is what the Body Preset tab
+    uses to disable the lean correction even when the slider is non-zero.
+    """
+    if bundle is None:
+        bundle = load_bundle()
+    if device is None:
+        device = torch.device(bundle.device)
+    mhr_head = bundle.model.head_pose
+
+    lean_strength = (
+        0.0 if suppress_lean
+        else float(settings["pose_adjust"].get("lean_correction", 0.0))
+    )
     global_rot = cs.to_tensor_1xN(sess.global_rot, device, width=3)
     body_pose = cs.to_tensor_1xN(sess.body_pose_params, device, width=133)
     hand_pose = cs.to_tensor_1xN(sess.hand_pose_params, device, width=108)
     expr = torch.zeros((1, mhr_head.num_face_comps), dtype=torch.float32, device=device)
     global_trans = torch.zeros((1, 3), dtype=torch.float32, device=device)
-    shape_params = cs.build_shape_params(s["body_params"], mhr_head.num_shape_comps, device)
+    shape_params = cs.build_shape_params(settings["body_params"], mhr_head.num_shape_comps, device)
     scale_params = torch.zeros((1, mhr_head.num_scale_comps), dtype=torch.float32, device=device)
 
     with torch.no_grad():
@@ -314,16 +294,14 @@ def render_from_session(
     coords_np = joint_coords.detach().cpu().numpy() if joint_coords is not None else None
     if coords_np is not None and coords_np.ndim == 3:
         coords_np = coords_np[0]
-    # `faces` already loaded above for cache short-circuit.
 
-    # Cache MHR rest data (idempotent per mhr_head).
     cs.ensure_mhr_rest_cache(mhr_head, device)
 
     if coords_np is not None:
         vertices = cs.normalize_bone_lengths(vertices, coords_np)
 
     pack = active_pack_paths()
-    bs_sliders = s["blendshapes"]
+    bs_sliders = settings["blendshapes"]
     if any(v != 0.0 for v in bs_sliders.values()) and rots_np is not None:
         rest_verts = cs.ensure_mhr_rest_cache(mhr_head, device)
         vertices = cs.apply_face_blendshapes(
@@ -332,7 +310,7 @@ def render_from_session(
             npz_path=str(pack.npz_path),
         )
 
-    bl = s["bone_lengths"]
+    bl = settings["bone_lengths"]
     if rots_np is not None and any(abs(bl[k] - 1.0) > 1e-9 for k in cs.BONE_LENGTH_KEYS):
         vertices = cs.apply_bone_length_scales(
             vertices,
@@ -340,9 +318,6 @@ def render_from_session(
             torso_scale=bl["torso"], neck_scale=bl["neck"],
             joint_rots_posed=rots_np,
         )
-        # Mirror the per-chain scaling onto the joint positions so the
-        # humanoid skeleton overlay sits on the deformed mesh's joints (and
-        # so the lean / rotation overrides below pivot at the right place).
         if coords_np is not None:
             coords_np = cs.scale_joint_coords_by_bone_length(
                 coords_np,
@@ -350,42 +325,80 @@ def render_from_session(
                 torso_scale=bl["torso"], neck_scale=bl["neck"],
             )
 
-    # Lean correction — straighten a forward-leaning upper body by
-    # rotating the spine→neck chain backward (applied last so it composes
-    # on top of bone-length / blendshape adjustments).
     parents_np = cs._FACE_BS_CACHE.get("joint_parents")
     if coords_np is not None and lean_strength > 1e-6:
         vertices = cs.apply_pose_lean_correction_mesh(
             vertices, coords_np, lean_strength,
         )
-        # Carry the lean correction forward into the per-joint state so the
-        # humanoid skeleton returned to the frontend (and any subsequent
-        # rotation overrides applied below) sees the post-lean pose.
         if rots_np is not None and parents_np is not None:
             rots_np, coords_np = cs.apply_pose_lean_correction_rig(
                 rots_np, coords_np, parents_np, lean_strength,
             )
 
-    # Snapshot humanoid skeleton AFTER lean but BEFORE rotation overrides —
-    # this is the "base" frame the frontend rotation editor uses to
-    # interpret stored local-frame Euler overrides.
     humanoid_skeleton = _build_humanoid_skeleton(rots_np, coords_np)
 
-    # Per-bone rotation overrides (image-tab rotation editor). Applied last
-    # so lean / bone-length / blendshape layers are fully baked first.
-    rotation_overrides = s["pose_adjust"].get("rotation_overrides") or {}
+    rotation_overrides = settings["pose_adjust"].get("rotation_overrides") or {}
     if (coords_np is not None and rots_np is not None
             and parents_np is not None and rotation_overrides):
         vertices = cs.apply_pose_rotation_overrides_mesh(
             vertices, rots_np, coords_np, parents_np, rotation_overrides,
         )
 
-    # mhr_forward already produces vertices in an OpenGL-convention world
-    # frame (Y up, Z toward the viewer); dropping them straight into Three.js
-    # is correct.
-    # Single overwriting file in tmp/; the `?v=...` query string below
-    # defeats the browser/Three.js cache so each slider drag pulls the
-    # fresh mesh rather than the stale one.
+    return vertices, humanoid_skeleton
+
+
+def render_from_session(
+    job_id: str,
+    settings: dict[str, Any] | None,
+) -> RenderResult:
+    """Build a mesh for ``job_id`` with the given slider values and write an
+    OBJ under ``output/``. Reuses the cached SAM3DBody model + pose session.
+
+    The reserved ``MAKE_JOB_ID`` renders the MHR neutral body in T-pose and
+    is used by the Body Preset tab — we auto-create it on first request
+    so it stays available even if LRU eviction ever drops it."""
+    t0 = time.monotonic()
+    if job_id == pose_session.MAKE_JOB_ID:
+        sess = pose_session.ensure_make_session()
+    else:
+        sess = pose_session.get(job_id)
+        if sess is None:
+            raise KeyError(f"no pose session for job_id {job_id!r}")
+
+    s = _normalise_settings(settings)
+    bundle = load_bundle()
+    device = torch.device(bundle.device)
+    mhr_head = bundle.model.head_pose
+
+    faces = mhr_head.faces.detach().cpu().numpy()
+    cache_key = _render_cache_key(job_id, s)
+    cached = _render_cache_get(cache_key)
+    if cached is not None:
+        cached_verts, cached_skeleton = cached
+        render_id = uuid.uuid4().hex[:8]
+        obj_path = _paths.tmp_dir() / "mesh.obj"
+        write_obj(
+            obj_path, cached_verts, faces,
+            header=f"# sam3dbody job {job_id} render {render_id} (cached)",
+        )
+        obj_url = _paths.tmp_url("mesh.obj", version=render_id)
+        elapsed = time.monotonic() - t0
+        log.info("render job=%s render=%s CACHED elapsed=%.3fs", job_id, render_id, elapsed)
+        return RenderResult(
+            job_id=job_id,
+            obj_url=obj_url,
+            obj_path=str(obj_path),
+            elapsed_sec=elapsed,
+            settings=s,
+            humanoid_skeleton=cached_skeleton,
+        )
+
+    vertices, humanoid_skeleton = compute_session_mesh(
+        sess, s,
+        bundle=bundle, device=device,
+        suppress_lean=(job_id == pose_session.MAKE_JOB_ID),
+    )
+
     render_id = uuid.uuid4().hex[:8]
     obj_path = _paths.tmp_dir() / "mesh.obj"
     write_obj(obj_path, vertices, faces, header=f"# sam3dbody job {job_id} render {render_id}")

@@ -19,7 +19,7 @@ Workflow:
 1. Open `tools/bone_backup/all_parts_bs.fbx` in Blender
 2. Add / edit / rename shape keys on the `mhr_reference` object
 3. Save as FBX (use the export settings below)
-4. From a shell, run `tools/extract_face_blendshapes.py` via headless Blender — it auto-syncs `presets/face_blendshapes.npz` + `chara_settings_presets/*.json` + `process.py`'s `_UI_BLENDSHAPE_ORDER`
+4. From a shell, run `tools/extract_face_blendshapes.py` via headless Blender — it auto-syncs `presets/face_blendshapes.npz` + `body_preset_settings/*.json` + `process.py`'s `_UI_BLENDSHAPE_ORDER`
 
 #### FBX export settings
 
@@ -61,7 +61,7 @@ The `bs_*` sliders are auto-discovered from `presets/face_blendshapes.npz`, so *
    ```
 
    - `presets/face_blendshapes.npz` is rebuilt from the FBX
-   - `chara_settings_presets/*.json` get the new key added (default 0.0) and stale keys removed
+   - `body_preset_settings/*.json` get the new key added (default 0.0) and stale keys removed
    - `process.py`'s `_UI_BLENDSHAPE_ORDER` gets the new key inserted at the end of its category (face/neck/chest/shoulder/waist/limbs inferred from the name prefix)
 
 6. Refresh ComfyUI — the new slider appears in the UI.
@@ -113,7 +113,7 @@ Reload the browser — the new shape keys and updated UI order show up automatic
 
 ## Preset packs (distributable blend-shape definitions)
 
-This plugin bundles its blend-shape definitions, vertex mapping, and character preset JSONs into a single unit called a **preset pack**. The pack system exists so users can author their own blend-shape sets and share them with others as self-contained folders.
+This plugin bundles its blend-shape definitions, vertex mapping, and body preset JSONs into a single unit called a **preset pack**. The pack system exists so users can author their own blend-shape sets and share them with others as self-contained folders.
 
 ### Switching packs
 
@@ -130,7 +130,7 @@ If the named pack is missing, the runtime falls back to `default` automatically.
 1. Copy `presets/default/` to `presets/my_pack/`
 2. Edit `config.ini` so `[active] pack = my_pack`
 3. Open `tools/bone_backup/all_parts_bs.fbx` in Blender and add / edit the shape keys you want
-4. Run `tools/extract_face_blendshapes.py` — it writes into the active pack (`my_pack`), regenerates `face_blendshapes.npz`, and auto-syncs both `chara_settings_presets/*.json` and `process.py`'s `_UI_BLENDSHAPE_ORDER`
+4. Run `tools/extract_face_blendshapes.py` — it writes into the active pack (`my_pack`), regenerates `face_blendshapes.npz`, and auto-syncs both `body_preset_settings/*.json` and `process.py`'s `_UI_BLENDSHAPE_ORDER`
 5. Optionally run `tools/rebuild_vertex_jsons.py` to refresh `mhr_reference_vertices.json`
 6. Zip the `presets/my_pack/` folder and distribute
 

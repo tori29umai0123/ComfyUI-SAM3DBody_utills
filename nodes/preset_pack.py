@@ -14,7 +14,7 @@ Files older than this revision used ``active_preset.ini`` (with only the
 
 Public surface kept stable so existing imports keep working:
     repo_root, active_pack_name, active_pack_dir, npz_path,
-    vertices_json_path, chara_settings_dir.
+    vertices_json_path, body_preset_settings_dir.
 
 Added in this revision:
     get_blender_exe_path, set_blender_exe_path.
@@ -30,6 +30,9 @@ _CONFIG_PATH = _REPO_ROOT / "config.ini"
 _LEGACY_INI_PATH = _REPO_ROOT / "active_preset.ini"
 _DEFAULT_PACK = "default"
 _DEFAULT_BLENDER_EXE = r"C:\Program Files\Blender Foundation\Blender 4.1\blender.exe"
+_DEFAULT_DISPLAY_UNIT = "cm"          # cm | inch
+_DEFAULT_ADULT_HEIGHT_M = 1.70        # used when the Pose Editor + receives an empty height field
+_VALID_DISPLAY_UNITS = ("cm", "inch")
 
 
 def repo_root() -> Path:
@@ -81,14 +84,18 @@ def _write_config(cp: configparser.ConfigParser) -> None:
     header = (
         "; SAM3DBody runtime configuration.\n"
         ";\n"
-        "; [active]   pack       = directory name under presets/ that supplies\n"
-        ";                         face_blendshapes.npz, mhr_reference_vertices.json,\n"
-        ";                         and chara_settings_presets/*.json.\n"
-        "; [blender]  exe_path   = absolute path to blender(.exe). Used by the\n"
-        ";                         FBX/BVH export nodes. Updated automatically\n"
-        ";                         whenever an export node runs with a new path,\n"
-        ";                         so newly-added export nodes inherit the latest\n"
-        ";                         working location as their UI default.\n"
+        "; [active]  pack                   = directory name under presets/ that supplies\n"
+        ";                                    face_blendshapes.npz, mhr_reference_vertices.json,\n"
+        ";                                    and body_preset_settings/*.json.\n"
+        "; [blender] exe_path               = absolute path to blender(.exe). Used by the\n"
+        ";                                    FBX/BVH export nodes. Updated automatically\n"
+        ";                                    whenever an export node runs with a new path,\n"
+        ";                                    so newly-added export nodes inherit the latest\n"
+        ";                                    working location as their UI default.\n"
+        "; [units]   display                = cm | inch. Display unit for height inputs in\n"
+        ";                                    the Pose Editor +. Internal math is always m.\n"
+        ";           default_adult_height_m = float (meters). Fallback height when a person's\n"
+        ";                                    height field is left blank.\n"
         "\n"
     )
     # Make sure the canonical sections exist so a fresh write isn't empty.
@@ -98,6 +105,10 @@ def _write_config(cp: configparser.ConfigParser) -> None:
     if not cp.has_section("blender"):
         cp.add_section("blender")
     cp["blender"].setdefault("exe_path", _DEFAULT_BLENDER_EXE)
+    if not cp.has_section("units"):
+        cp.add_section("units")
+    cp["units"].setdefault("display", _DEFAULT_DISPLAY_UNIT)
+    cp["units"].setdefault("default_adult_height_m", str(_DEFAULT_ADULT_HEIGHT_M))
 
     with _CONFIG_PATH.open("w", encoding="utf-8") as f:
         f.write(header)
@@ -148,8 +159,8 @@ def vertices_json_path(object_name: str) -> Path:
     return active_pack_dir() / f"{object_name}_vertices.json"
 
 
-def chara_settings_dir() -> Path:
-    return active_pack_dir() / "chara_settings_presets"
+def body_preset_settings_dir() -> Path:
+    return active_pack_dir() / "body_preset_settings"
 
 
 # ---------------------------------------------------------------------------
@@ -165,16 +176,33 @@ def get_blender_exe_path() -> str:
     return raw or _DEFAULT_BLENDER_EXE
 
 
+def clean_blender_exe_path(raw: str | None) -> str:
+    """Strip whitespace + a single layer of surrounding quotes from a
+    user-typed Blender path.
+
+    Windows users often paste paths with quotes around them (the format
+    Explorer's "Copy as path" emits, e.g. ``"C:\\Program Files\\Blender
+    Foundation\\Blender 4.1\\blender.exe"``). Both ``'foo'`` and ``"foo"``
+    wrappers are stripped; backslashes inside are kept verbatim since
+    ``subprocess`` accepts either separator on Windows."""
+    if raw is None:
+        return ""
+    s = str(raw).strip()
+    if len(s) >= 2 and s[0] == s[-1] and s[0] in ('"', "'"):
+        s = s[1:-1].strip()
+    return s
+
+
 def set_blender_exe_path(path: str) -> None:
     """Persist ``path`` as the new ``[blender] exe_path``. No-op if ``path``
     is empty / whitespace, or already equal to the stored value (so nodes
     can call this unconditionally on every execute without churning the
-    file). Tilde and environment variables are NOT expanded — the value
-    travels through the export nodes verbatim, preserving whatever format
-    the user typed."""
-    if not path or not path.strip():
+    file). Surrounding quotes are stripped (see ``clean_blender_exe_path``);
+    tilde and environment variables are NOT expanded — the cleaned value
+    travels through the export nodes verbatim."""
+    new = clean_blender_exe_path(path)
+    if not new:
         return
-    new = path.strip()
     cp = _read_config()
     cur = cp.get("blender", "exe_path", fallback="").strip()
     if cur == new:
@@ -185,3 +213,51 @@ def set_blender_exe_path(path: str) -> None:
 # Convenience constant for callers that want the hard-coded fallback
 # without having to recompute it (e.g., for tooltips).
 DEFAULT_BLENDER_EXE = _DEFAULT_BLENDER_EXE
+
+
+# ---------------------------------------------------------------------------
+# [units] display / default_adult_height_m
+# ---------------------------------------------------------------------------
+
+def get_display_unit() -> str:
+    """``"cm"`` or ``"inch"`` — the unit used for height inputs in the Multi
+    Pose Editor's UI. Internal math always uses meters; this is purely a
+    display preference. Falls back to ``"cm"`` for any unrecognised value."""
+    cp = _read_config()
+    raw = cp.get("units", "display", fallback=_DEFAULT_DISPLAY_UNIT).strip().lower()
+    return raw if raw in _VALID_DISPLAY_UNITS else _DEFAULT_DISPLAY_UNIT
+
+
+def set_display_unit(unit: str) -> None:
+    """Persist ``"cm"`` or ``"inch"`` as the new display unit. Anything else
+    is rejected silently (caller-side validation should have already caught
+    bad input)."""
+    new = (unit or "").strip().lower()
+    if new not in _VALID_DISPLAY_UNITS:
+        return
+    cp = _read_config()
+    cur = cp.get("units", "display", fallback="").strip().lower()
+    if cur == new:
+        return
+    _set_kv("units", "display", new)
+
+
+def get_default_adult_height_m() -> float:
+    """Default height (meters) used when the user leaves a person's height
+    field empty in the Pose Editor +."""
+    cp = _read_config()
+    raw = cp.get("units", "default_adult_height_m",
+                 fallback=str(_DEFAULT_ADULT_HEIGHT_M)).strip()
+    try:
+        v = float(raw)
+    except ValueError:
+        return _DEFAULT_ADULT_HEIGHT_M
+    # Clamp to a generous-but-sane band so a typo doesn't break inference.
+    if not (0.3 <= v <= 3.0):
+        return _DEFAULT_ADULT_HEIGHT_M
+    return v
+
+
+DEFAULT_DISPLAY_UNIT = _DEFAULT_DISPLAY_UNIT
+DEFAULT_ADULT_HEIGHT_M = _DEFAULT_ADULT_HEIGHT_M
+VALID_DISPLAY_UNITS = _VALID_DISPLAY_UNITS

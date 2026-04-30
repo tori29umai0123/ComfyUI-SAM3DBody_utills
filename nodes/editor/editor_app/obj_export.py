@@ -48,7 +48,7 @@ def write_obj_flip_y(
 
     The correct transform is a 180° rotation around the X axis, i.e. flip
     BOTH Y and Z. Using a *rotation* (two reflections cancel) preserves
-    chirality so the character's left/right isn't mirrored, and preserves
+    chirality so the body's left/right isn't mirrored, and preserves
     triangle winding so no face re-ordering is needed.
     """
     v = np.asarray(vertices, dtype=np.float32).copy()

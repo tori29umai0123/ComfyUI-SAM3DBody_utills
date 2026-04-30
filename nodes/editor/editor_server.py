@@ -85,9 +85,14 @@ async def serve_pose_editor(_request: web.Request) -> web.Response:
     return _serve_html("pose_editor.html")
 
 
-@routes.get("/sam3d/editor/character")
-async def serve_character_editor(_request: web.Request) -> web.Response:
-    return _serve_html("character_editor.html")
+@routes.get("/sam3d/editor/pose_plus")
+async def serve_pose_plus_editor(_request: web.Request) -> web.Response:
+    return _serve_html("pose_editor_plus.html")
+
+
+@routes.get("/sam3d/editor/body_preset")
+async def serve_body_preset_editor(_request: web.Request) -> web.Response:
+    return _serve_html("body_preset_editor.html")
 
 
 @routes.get("/sam3d/editor/tmp/{name:.*}")
@@ -122,5 +127,6 @@ except Exception as exc:  # noqa: BLE001
 
 print("[SAM3DBody] Registered editor routes:")
 print("[SAM3DBody]   GET  /sam3d/editor/pose")
-print("[SAM3DBody]   GET  /sam3d/editor/character")
+print("[SAM3DBody]   GET  /sam3d/editor/pose_plus")
+print("[SAM3DBody]   GET  /sam3d/editor/body_preset")
 print("[SAM3DBody]   GET  /sam3d/editor/tmp/{name}")

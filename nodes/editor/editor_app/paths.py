@@ -22,7 +22,7 @@ import folder_paths  # type: ignore[import-not-found]
 
 from ...preset_pack import (  # type: ignore[import-not-found]
     active_pack_dir,
-    chara_settings_dir,
+    body_preset_settings_dir,
     repo_root,
 )
 
@@ -35,8 +35,11 @@ SAM3D_DIR: Path = MODELS_DIR / "sam3dbody"
 # BiRefNet auto-mask node share a single model snapshot rather than each
 # downloading their own ~170 MB copy. If you change one, change both.
 BIREFNET_DIR: Path = MODELS_DIR / "birefnet" / "BiRefNet_lite"
+# SAM 2 (hiera-tiny) snapshot — used by the Pose Editor + to produce
+# per-person instance masks from user-drawn bounding boxes.
+SAM2_DIR: Path = MODELS_DIR / "sam2" / "tiny"
 
-for _d in (TMP_DIR, SAM3D_DIR, BIREFNET_DIR):
+for _d in (TMP_DIR, SAM3D_DIR, BIREFNET_DIR, SAM2_DIR):
     _d.mkdir(parents=True, exist_ok=True)
 
 
@@ -52,12 +55,16 @@ def birefnet_dir() -> Path:
     return BIREFNET_DIR
 
 
+def sam2_dir() -> Path:
+    return SAM2_DIR
+
+
 def active_preset_dir() -> Path:
     return active_pack_dir()
 
 
-def active_chara_settings_dir() -> Path:
-    return chara_settings_dir()
+def active_body_preset_settings_dir() -> Path:
+    return body_preset_settings_dir()
 
 
 # Public URL prefix the editor frontend uses to fetch tmp artifacts;

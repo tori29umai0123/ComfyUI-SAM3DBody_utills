@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>SAM 3D Body — Character Editor</title>
+<title>SAM 3D Body — Body Preset Editor</title>
 <link rel="stylesheet" href="/extensions/ComfyUI-SAM3DBody_utills/editor/static/style.css" />
 <style>
   header .hdr-right { gap: 12px; align-items: center; }
@@ -28,13 +28,13 @@
 }
 </script>
 <script>
-  window.SAM3D_EDITOR_MODE = "character";
+  window.SAM3D_EDITOR_MODE = "body_preset";
 </script>
 </head>
 <body>
 <header>
   <div class="hdr-left">
-    <h1>SAM 3D Body — Character Editor</h1>
+    <h1>SAM 3D Body — Body Preset Editor</h1>
   </div>
   <div class="hdr-right">
     <div id="status" class="status" data-i18n="status.init">initializing…</div>
@@ -56,43 +56,47 @@
     <!-- ===== Make tab ===== -->
     <div data-tab-panel="make">
       <section id="make-section">
-        <h2 data-i18n="section.make">キャラメイク</h2>
-        <p class="muted" data-i18n="make.hint">MHR 既定の T-pose 素体に対して、下の Character スライダーで体形を調整できます。</p>
+        <h2 data-i18n="section.make">ボディプリセット</h2>
+        <p class="muted" data-i18n="make.hint">MHR 既定の T-pose 素体に対して、下の Body Preset スライダーで体形を調整できます。</p>
       </section>
     </div>
 
-    <!-- ===== Shared Character panel (preset, JSON, sliders) ===== -->
-    <section id="character-section" data-tab-show="make" hidden>
-      <h2 data-i18n="section.character">Character</h2>
+    <!-- ===== Shared Body Preset panel (preset, JSON, sliders) ===== -->
+    <section id="body-preset-section" data-tab-show="make" hidden>
+      <h2 data-i18n="section.body_preset">Body Preset</h2>
       <div class="row" data-pose-lock>
         <select id="preset-select">
-          <option value="" data-i18n="character.preset_placeholder">(preset)</option>
+          <option value="" data-i18n="body_preset.preset_placeholder">(preset)</option>
         </select>
-        <button id="load-preset-btn" data-i18n="character.load" data-i18n-title="tooltip.pack_switch">Load</button>
+        <button id="load-preset-btn" data-i18n="body_preset.load" data-i18n-title="tooltip.pack_switch">Load</button>
       </div>
-      <label class="file-drop compact" id="char-json-drop" data-pose-lock>
-        <input type="file" id="char-json-input" accept=".json,application/json" />
-        <span id="char-json-label" data-i18n="character.json_drop">キャラクター JSON をアップロード (任意)</span>
+      <label class="file-drop compact" id="body-preset-json-drop" data-pose-lock>
+        <input type="file" id="body-preset-json-input" accept=".json,application/json" />
+        <span id="body-preset-json-label" data-i18n="body_preset.json_drop">ボディプリセット JSON をアップロード (任意)</span>
       </label>
-      <div id="char-source-info" class="muted"></div>
+      <div id="body-preset-source-info" class="muted"></div>
       <div class="row"><span id="render-info" class="muted"></span></div>
 
       <div data-tab-show="make">
         <div class="row">
-          <button id="reset-btn" data-i18n="character.reset" data-i18n-title="tooltip.reset">Reset</button>
+          <button id="reset-btn" data-i18n="body_preset.reset" data-i18n-title="tooltip.reset">Reset</button>
         </div>
         <details open>
-          <summary data-i18n="character.body_summary">Body (PCA 9 axes)</summary>
+          <summary data-i18n="body_preset.body_summary">Body (PCA 9 axes)</summary>
           <div id="body-params-sliders"></div>
         </details>
         <details>
-          <summary data-i18n="character.bone_summary">Bone length (4 chains)</summary>
+          <summary data-i18n="body_preset.bone_summary">Bone length (4 chains)</summary>
           <div id="bone-lengths-sliders"></div>
         </details>
         <details>
-          <summary data-i18n="character.bs_summary">Blendshapes</summary>
+          <summary data-i18n="body_preset.bs_summary">Blendshapes</summary>
           <div id="blendshapes-sliders"></div>
         </details>
+        <div class="row">
+          <button id="make-download-btn" data-i18n="make.download" data-i18n-title="tooltip.make_download">Download JSON</button>
+        </div>
+        <div id="make-download-info" class="muted"></div>
       </div>
     </section>
   </aside>
@@ -129,8 +133,6 @@
   <button id="export-bvh-btn"></button>
   <div id="fbx-info"></div>
   <div id="bvh-info"></div>
-  <button id="make-download-btn"></button>
-  <div id="make-download-info"></div>
   <input type="file" id="video-input" />
   <input id="video-bbox-thr" /><input id="video-fps" /><input id="video-stride" />
   <input id="video-max-frames" /><input id="video-lean-range" /><input id="video-lean-num" />

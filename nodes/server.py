@@ -3,7 +3,7 @@
 """Server routes for the SAM 3D Body custom nodes.
 
 Provides the REST endpoints the frontend extension uses to read
-autosave / preset JSON from chara_settings_presets/.
+autosave / preset JSON from body_preset_settings/.
 """
 
 import os
@@ -11,23 +11,23 @@ import json
 from aiohttp import web
 from server import PromptServer
 
-from .preset_pack import chara_settings_dir
+from .preset_pack import body_preset_settings_dir
 
 
 routes = PromptServer.instance.routes
 
 
-def _chara_dir() -> str:
+def _body_preset_dir() -> str:
     """Resolved lazily so edits to config.ini take effect on the
     next HTTP request, no server restart needed."""
-    return str(chara_settings_dir())
+    return str(body_preset_settings_dir())
 
 
 @routes.get('/sam3d/autosave')
 async def get_autosave(request):
-    """Return the contents of the active pack's chara_settings_presets/
+    """Return the contents of the active pack's body_preset_settings/
     autosave.json, or an empty object if the file is missing / unreadable."""
-    path = os.path.join(_chara_dir(), 'autosave.json')
+    path = os.path.join(_body_preset_dir(), 'autosave.json')
     if not os.path.exists(path):
         return web.json_response({})
     try:
@@ -39,7 +39,7 @@ async def get_autosave(request):
 
 @routes.get('/sam3d/preset/{name}')
 async def get_preset(request):
-    """Return the contents of chara_settings_presets/{name}.json. Used
+    """Return the contents of body_preset_settings/{name}.json. Used
     by the frontend extension to apply preset values to slider widgets
     as soon as the user selects a preset in the dropdown. `autosave`
     is a first-class preset and is served through this route just like
@@ -47,7 +47,7 @@ async def get_preset(request):
     name = request.match_info.get('name', '')
     if not name or '/' in name or '\\' in name or '..' in name:
         return web.json_response({'error': 'invalid preset name'}, status=400)
-    path = os.path.join(_chara_dir(), f'{name}.json')
+    path = os.path.join(_body_preset_dir(), f'{name}.json')
     if not os.path.isfile(path):
         return web.json_response({'error': 'not found'}, status=404)
     try:

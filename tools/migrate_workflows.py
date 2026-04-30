@@ -1,8 +1,8 @@
 """Migrate ComfyUI workflows from the legacy SAM3DBodyRenderFromJson
-node (single render-with-chara-sliders) to the new pair:
+node (single render-with-body-preset-sliders) to the new pair:
 
-  SAM3DBodySettingCharaJson           (preset + 9 body + 4 bone + N bs widgets)
-  SAM3DBodyRenderFromPoseAndCharaJson (model + pose_json + chara_json
+  SAM3DBodySettingBodyPresetJson           (preset + 9 body + 4 bone + N bs widgets)
+  SAM3DBodyRenderFromPoseAndBodyPresetJson (model + pose_json + body_preset_json
                                        + camera widgets + bg)
 
 For every workflow JSON found under the supplied roots, every old node
@@ -54,8 +54,8 @@ LEGACY_WIDGET_LAYOUT = [
 # Anything past slot 22 is a bs_<name> entry (variable-length, depends
 # on the npz the workflow was authored against).
 
-CHARA_NODE_TYPE = "SAM3DBodySettingCharaJson"
-RENDER_NODE_TYPE = "SAM3DBodyRenderFromPoseAndCharaJson"
+BODY_PRESET_NODE_TYPE = "SAM3DBodySettingBodyPresetJson"
+RENDER_NODE_TYPE = "SAM3DBodyRenderFromPoseAndBodyPresetJson"
 LEGACY_NODE_TYPE = "SAM3DBodyRenderFromJson"
 
 
@@ -66,10 +66,10 @@ def _safe_get(seq, idx, default):
         return default
 
 
-def _make_chara_node(*, node_id, old_node):
-    """Build the new SettingCharaJson node from the old node's slider state."""
+def _make_body_preset_node(*, node_id, old_node):
+    """Build the new SettingBodyPresetJson node from the old node's slider state."""
     wv = old_node.get("widgets_values", [])
-    chara_widgets = [
+    body_preset_widgets = [
         _safe_get(wv,  1, "autosave"),
         _safe_get(wv, 10, 0.0),  # body_fat
         _safe_get(wv, 11, 0.0),  # body_muscle
@@ -90,7 +90,7 @@ def _make_chara_node(*, node_id, old_node):
     size = old_node.get("size") or [380, 1086]
     return {
         "id": node_id,
-        "type": CHARA_NODE_TYPE,
+        "type": BODY_PRESET_NODE_TYPE,
         "pos": [pos[0] - 460, pos[1]],
         "size": [380, max(600, size[1] if isinstance(size, list) else 1086)],
         "flags": {},
@@ -98,23 +98,23 @@ def _make_chara_node(*, node_id, old_node):
         "mode": 0,
         "inputs": [],
         "outputs": [{
-            "name": "chara_json",
+            "name": "body_preset_json",
             "type": "STRING",
             "links": [],  # filled in below when we add the C→R link
             "slot_index": 0,
         }],
-        "properties": {"Node name for S&R": CHARA_NODE_TYPE},
-        "widgets_values": chara_widgets,
+        "properties": {"Node name for S&R": BODY_PRESET_NODE_TYPE},
+        "widgets_values": body_preset_widgets,
     }
 
 
 def _make_render_node(*, node_id, old_node):
-    """Build the new RenderFromPoseAndCharaJson node, taking the camera
+    """Build the new RenderFromPoseAndBodyPresetJson node, taking the camera
     + pose_adjust widget values from the old node."""
     wv = old_node.get("widgets_values", [])
     render_widgets = [
         _safe_get(wv, 0, "{}"),       # pose_json widget value (literal)
-        "{}",                          # chara_json widget value (link replaces)
+        "{}",                          # body_preset_json widget value (link replaces)
         _safe_get(wv, 2, 0.0),        # offset_x
         _safe_get(wv, 3, 0.0),        # offset_y
         _safe_get(wv, 4, 1.0),        # scale_offset
@@ -139,8 +139,8 @@ def _make_render_node(*, node_id, old_node):
             {"name": "model",            "type": "SAM3D_MODEL", "link": None},
             {"name": "pose_json",        "type": "STRING",
              "widget": {"name": "pose_json"},  "link": None},
-            {"name": "chara_json",       "type": "STRING",
-             "widget": {"name": "chara_json"}, "link": None},
+            {"name": "body_preset_json",       "type": "STRING",
+             "widget": {"name": "body_preset_json"}, "link": None},
             {"name": "background_image", "type": "IMAGE", "shape": 7, "link": None},
         ],
         "outputs": [
@@ -170,18 +170,18 @@ def _migrate_workflow(wf: dict) -> int:
 
     for old in legacy_nodes:
         last_node_id += 1
-        chara_id = last_node_id
+        body_preset_id = last_node_id
         last_node_id += 1
         render_id = last_node_id
 
-        chara = _make_chara_node(node_id=chara_id, old_node=old)
+        body_preset = _make_body_preset_node(node_id=body_preset_id, old_node=old)
         render = _make_render_node(node_id=render_id, old_node=old)
 
-        # 1) C → R chara_json link.
+        # 1) C → R body_preset_json link.
         last_link_id += 1
-        chara_link = [last_link_id, chara_id, 0, render_id, 2, "STRING"]
-        wf["links"].append(chara_link)
-        chara["outputs"][0]["links"].append(last_link_id)
+        body_preset_link = [last_link_id, body_preset_id, 0, render_id, 2, "STRING"]
+        wf["links"].append(body_preset_link)
+        body_preset["outputs"][0]["links"].append(last_link_id)
         render["inputs"][2]["link"] = last_link_id
 
         # 2) Re-route every link that used to touch the old node.
@@ -222,7 +222,7 @@ def _migrate_workflow(wf: dict) -> int:
 
         # 3) Replace old node with the two new ones.
         wf["nodes"].remove(old)
-        wf["nodes"].append(chara)
+        wf["nodes"].append(body_preset)
         wf["nodes"].append(render)
 
     wf["last_node_id"] = last_node_id

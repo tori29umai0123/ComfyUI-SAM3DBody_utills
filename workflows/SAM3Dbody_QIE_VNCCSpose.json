@@ -708,7 +708,7 @@
     },
     {
       "id": 674,
-      "type": "SAM3DBodySettingCharaJson",
+      "type": "SAM3DBodySettingBodyPresetJson",
       "pos": [
         1311.3318630059453,
         579.584146574539
@@ -723,7 +723,7 @@
       "inputs": [],
       "outputs": [
         {
-          "name": "chara_json",
+          "name": "body_preset_json",
           "type": "STRING",
           "links": [
             1995
@@ -733,7 +733,7 @@
       "properties": {
         "aux_id": "tori29umai0123/ComfyUI-SAM3DBody_utills",
         "ver": "0de650cee18b821369cd98fe43dfcd8e3e5f8a10",
-        "Node name for S&R": "SAM3DBodySettingCharaJson"
+        "Node name for S&R": "SAM3DBodySettingBodyPresetJson"
       },
       "widgets_values": [
         "female",
@@ -850,7 +850,7 @@
         }
       },
       "widgets_values": [
-        "Draw character from image2",
+        "Draw body preset from image2",
         1,
         "Picture1",
         "Picture2",
@@ -909,7 +909,7 @@
     },
     {
       "id": 676,
-      "type": "SAM3DBodyRenderFromPoseAndCharaJson",
+      "type": "SAM3DBodyRenderFromPoseAndBodyPresetJson",
       "pos": [
         1757.5184203018334,
         269.35871425976353
@@ -942,10 +942,10 @@
           "link": 1994
         },
         {
-          "name": "chara_json",
+          "name": "body_preset_json",
           "type": "STRING",
           "widget": {
-            "name": "chara_json"
+            "name": "body_preset_json"
           },
           "link": 1995
         }
@@ -964,7 +964,7 @@
       "properties": {
         "aux_id": "tori29umai0123/ComfyUI-SAM3DBody_utills",
         "ver": "0de650cee18b821369cd98fe43dfcd8e3e5f8a10",
-        "Node name for S&R": "SAM3DBodyRenderFromPoseAndCharaJson"
+        "Node name for S&R": "SAM3DBodyRenderFromPoseAndBodyPresetJson"
       },
       "widgets_values": [
         "{}",
@@ -1008,7 +1008,7 @@
           "links": null
         }
       ],
-      "title": "CharaImage",
+      "title": "BodyPresetImage",
       "properties": {
         "cnr_id": "comfy-core",
         "ver": "0.6.0",

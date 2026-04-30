@@ -2,7 +2,7 @@
 
 Use cases (one CLI call each):
   - SAM3DBodyProcessToJson: drop slot 1 ``image`` (pose_json only now).
-  - SAM3DBodyRenderFromPoseAndCharaJson: drop slot 1 ``settings_json``
+  - SAM3DBodyRenderFromPoseAndBodyPresetJson: drop slot 1 ``settings_json``
     (image only now).
 
 Each invocation:

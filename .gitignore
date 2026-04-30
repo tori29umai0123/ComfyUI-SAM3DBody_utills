@@ -101,7 +101,7 @@ htmlcov/
 # it's user-local state rather than source. The named presets (female /
 # male / reset / etc.) ARE tracked. Pattern covers any preset pack
 # (default, custom, ...).
-presets/*/chara_settings_presets/autosave.json
+presets/*/body_preset_settings/autosave.json
 
 # ==========================================================================
 # Explicit allow-list — files/paths that earlier versions of this

@@ -29,6 +29,13 @@ class PoseSession:
     orig_cam_t: np.ndarray | None         # (3,)
     orig_keypoints_3d: np.ndarray | None  # (K, 3)
     bbox_xyxy: np.ndarray | None          # (4,)
+    # Pose Editor +: real-world height correction factor applied to the
+    # rendered mesh. ``1.0`` means "no correction" — every existing single-
+    # person flow leaves this at the default and is unaffected. The Multi
+    # pipeline computes ``s = target_height_m / measured_mesh_height`` and
+    # the multi renderer multiplies vertices and ``pred_cam_t`` by ``s`` so
+    # the 2D projection stays consistent (foreshortening preserved).
+    height_scale: float = 1.0
 
 
 class _SessionStore:
@@ -59,7 +66,7 @@ class _SessionStore:
 _store = _SessionStore()
 
 
-# Stable job_id for the "Character Make" tab — a zero-pose session so
+# Stable job_id for the "Body Preset" tab — a zero-pose session so
 # slider changes render the MHR neutral body regardless of any actual
 # subject that might have been processed earlier.
 MAKE_JOB_ID = "make"

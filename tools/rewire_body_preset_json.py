@@ -1,14 +1,15 @@
-"""Rewire any downstream ``character_json`` (or ``chara_json``) input
-that used to be fed by the legacy Render node's ``settings_json`` output
-so it now reads directly from the workflow's
-``SAM3DBodySettingCharaJson`` node's ``chara_json`` output.
+"""Rewire any downstream ``body_preset_json`` (or legacy
+``character_json`` / ``chara_json``) input that used to be fed by the
+legacy Render node's ``settings_json`` output so it now reads directly
+from the workflow's ``SAM3DBodySettingBodyPresetJson`` node's
+``body_preset_json`` output.
 
 Run this BEFORE strip_process_image_output.py with --producer
-SAM3DBodyRenderFromPoseAndCharaJson --slot 1 --name settings_json so
+SAM3DBodyRenderFromPoseAndBodyPresetJson --slot 1 --name settings_json so
 the strip step doesn't leave export nodes dangling.
 
 Usage:
-    python tools/rewire_chara_json.py [--dry-run] DIR1 [DIR2 ...]
+    python tools/rewire_body_preset_json.py [--dry-run] DIR1 [DIR2 ...]
 """
 
 from __future__ import annotations
@@ -19,11 +20,11 @@ import shutil
 from datetime import datetime
 from pathlib import Path
 
-RENDER_TYPE = "SAM3DBodyRenderFromPoseAndCharaJson"
-SETTING_TYPE = "SAM3DBodySettingCharaJson"
+RENDER_TYPE = "SAM3DBodyRenderFromPoseAndBodyPresetJson"
+SETTING_TYPE = "SAM3DBodySettingBodyPresetJson"
 SETTINGS_JSON_SLOT = 1            # the slot to be replaced
 SETTINGS_JSON_NAME = "settings_json"
-CHARA_INPUT_NAMES = {"character_json", "chara_json"}
+BODY_PRESET_INPUT_NAMES = {"body_preset_json", "character_json", "chara_json"}
 
 
 def _rewire(wf: dict) -> tuple[int, list[str]]:
@@ -38,14 +39,14 @@ def _rewire(wf: dict) -> tuple[int, list[str]]:
         return 0, [f"  warn: multiple {SETTING_TYPE} nodes — manual rewire recommended"]
     setting = setting_nodes[0]
     setting_id = setting["id"]
-    # Locate the chara_json output slot (slot index in `outputs` list).
-    chara_slot = None
+    # Locate the body_preset_json output slot (slot index in `outputs` list).
+    body_preset_slot = None
     for i, o in enumerate(setting.get("outputs", [])):
-        if o.get("name") == "chara_json":
-            chara_slot = i
+        if o.get("name") == "body_preset_json":
+            body_preset_slot = i
             break
-    if chara_slot is None:
-        return 0, [f"  warn: {SETTING_TYPE} has no chara_json output"]
+    if body_preset_slot is None:
+        return 0, [f"  warn: {SETTING_TYPE} has no body_preset_json output"]
 
     notes: list[str] = []
     rewired = 0
@@ -67,13 +68,13 @@ def _rewire(wf: dict) -> tuple[int, list[str]]:
             if not target_input:
                 continue
             inp_name = target_input.get("name")
-            if inp_name not in CHARA_INPUT_NAMES:
+            if inp_name not in BODY_PRESET_INPUT_NAMES:
                 continue  # leave unrelated downstream consumers alone
 
-            # Re-route this link to setting.chara_json.
+            # Re-route this link to setting.body_preset_json.
             L[1] = setting_id
-            L[2] = chara_slot
-            # Also remove from render.outputs[slot].links and add to setting.outputs[chara_slot].links.
+            L[2] = body_preset_slot
+            # Also remove from render.outputs[slot].links and add to setting.outputs[body_preset_slot].links.
             try:
                 render["outputs"][SETTINGS_JSON_SLOT]["links"] = [
                     lid for lid in render["outputs"][SETTINGS_JSON_SLOT].get("links", [])
@@ -81,7 +82,7 @@ def _rewire(wf: dict) -> tuple[int, list[str]]:
                 ]
             except (KeyError, IndexError):
                 pass
-            sout = setting["outputs"][chara_slot]
+            sout = setting["outputs"][body_preset_slot]
             sout.setdefault("links", [])
             if link_id not in sout["links"]:
                 sout["links"].append(link_id)
@@ -89,7 +90,7 @@ def _rewire(wf: dict) -> tuple[int, list[str]]:
             rewired += 1
             notes.append(
                 f"  link {link_id}: render({render['id']}).settings_json "
-                f"-> setting({setting_id}).chara_json (was -> "
+                f"-> setting({setting_id}).body_preset_json (was -> "
                 f"{target_node.get('type')}.{inp_name})"
             )
 

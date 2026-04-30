@@ -5,7 +5,7 @@ Provides:
 * SAM 3D Body: Export Animated BVH
 
 Both nodes accept the same core inputs:
-    model, character_json, pose_json, blender_exe, output_filename
+    model, body_preset_json, pose_json, blender_exe, output_filename
 
 `pose_json` can be either a single pose object or an animation payload:
 * single pose:
@@ -155,7 +155,7 @@ def _subset_humanoid(package):
     return new_package
 
 
-def _build_character_rest(model, preset):
+def _build_body_preset_rest(model, preset):
     loaded = _load_sam3d_model(model)
     sam_3d_model = loaded["model"]
     device = torch.device(loaded["device"])
@@ -333,9 +333,9 @@ def _ui_result(output_path):
 class SAM3DBodyExportPosedBVH:
     @classmethod
     def INPUT_TYPES(cls):
-        character_placeholder = (
+        body_preset_placeholder = (
             "{\n"
-            '  "_slot": "=== CHARACTER JSON ===",\n'
+            '  "_slot": "=== BODY PRESET JSON ===",\n'
             '  "_hint": "Paste Render node\'s settings_json output here.",\n'
             '  "body_params": {},\n'
             '  "bone_lengths": {},\n'
@@ -354,7 +354,7 @@ class SAM3DBodyExportPosedBVH:
         return {
             "required": {
                 "model": ("SAM3D_MODEL",),
-                "character_json": ("STRING", {"multiline": True, "default": character_placeholder}),
+                "body_preset_json": ("STRING", {"multiline": True, "default": body_preset_placeholder}),
                 "pose_json": ("STRING", {"multiline": True, "default": pose_placeholder}),
                 "blender_exe": ("STRING", {
                     "default": get_blender_exe_path(),
@@ -371,7 +371,7 @@ class SAM3DBodyExportPosedBVH:
     CATEGORY = "SAM3DBody/export"
     OUTPUT_NODE = True
 
-    def export(self, model, character_json, pose_json, blender_exe, output_filename):
+    def export(self, model, body_preset_json, pose_json, blender_exe, output_filename):
         import folder_paths
 
         try:
@@ -379,14 +379,14 @@ class SAM3DBodyExportPosedBVH:
         except Exception as exc:
             print(f"[SAM3DBody] config.ini blender path save failed: {exc}")
 
-        preset = _parse_json_or_empty(character_json, "character_json")
+        preset = _parse_json_or_empty(body_preset_json, "body_preset_json")
         pose_payload = _parse_json_or_empty(pose_json, "pose_json")
         if isinstance(pose_payload, dict) and isinstance(pose_payload.get("frames"), list):
             pose_payload = pose_payload["frames"][0] if pose_payload["frames"] else {}
         elif isinstance(pose_payload, list):
             pose_payload = pose_payload[0] if pose_payload else {}
 
-        state = _build_character_rest(model, preset)
+        state = _build_body_preset_rest(model, preset)
         mhr_head = state["mhr_head"]
         device = state["device"]
         parents = state["parents"]
@@ -495,9 +495,9 @@ class SAM3DBodyExportPosedBVH:
 class SAM3DBodyExportAnimatedBVH:
     @classmethod
     def INPUT_TYPES(cls):
-        character_placeholder = (
+        body_preset_placeholder = (
             "{\n"
-            '  "_slot": "=== CHARACTER JSON ===",\n'
+            '  "_slot": "=== BODY PRESET JSON ===",\n'
             '  "_hint": "Paste Render node\'s settings_json output here.",\n'
             '  "body_params": {},\n'
             '  "bone_lengths": {},\n'
@@ -515,7 +515,7 @@ class SAM3DBodyExportAnimatedBVH:
             "required": {
                 "model": ("SAM3D_MODEL",),
                 "images": ("IMAGE",),
-                "character_json": ("STRING", {"multiline": True, "default": character_placeholder}),
+                "body_preset_json": ("STRING", {"multiline": True, "default": body_preset_placeholder}),
                 "pose_adjust": ("FLOAT", {"default": 0.0, "min": 0.0, "max": 1.0, "step": 0.01}),
                 "fps": ("FLOAT", {"default": 30.0, "min": 1.0, "max": 240.0, "step": 1.0}),
                 "bbox_threshold": ("FLOAT", {"default": 0.8, "min": 0.0, "max": 1.0, "step": 0.05}),
@@ -543,7 +543,7 @@ class SAM3DBodyExportAnimatedBVH:
         self,
         model,
         images,
-        character_json,
+        body_preset_json,
         pose_adjust,
         fps,
         bbox_threshold,
@@ -561,10 +561,10 @@ class SAM3DBodyExportAnimatedBVH:
         except Exception as exc:
             print(f"[SAM3DBody] config.ini blender path save failed: {exc}")
 
-        preset = _parse_json_or_empty(character_json, "character_json")
+        preset = _parse_json_or_empty(body_preset_json, "body_preset_json")
         motion_payload = _parse_json_or_empty(pose_json, "pose_json")
 
-        state = _build_character_rest(model, preset)
+        state = _build_body_preset_rest(model, preset)
         sam_3d_model = state["loaded"]["model"]
         mhr_head = state["mhr_head"]
         device = state["device"]

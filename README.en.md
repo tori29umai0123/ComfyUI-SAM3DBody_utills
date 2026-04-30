@@ -34,7 +34,7 @@ Feed a video via `ComfyUI-VideoHelperSuite`'s `VHS_LoadVideo` and the plugin run
 https://github.com/user-attachments/assets/4fa43a56-8dd2-4ebf-8abe-61a31ff14e6f
 <!-- DEMO_VIDEO_END -->
 
-## Included nodes (10 total)
+## Included nodes (11 total)
 
 ### Model / inference
 1. **Load SAM 3D Body Model** — lazy-loads the checkpoint from `<ComfyUI>/models/sam3dbody/`.
@@ -43,9 +43,9 @@ https://github.com/user-attachments/assets/4fa43a56-8dd2-4ebf-8abe-61a31ff14e6f
    - For higher tracking accuracy on tricky footage, connect an explicit `MASK` node
    - **Optional `Left_hand_image` / `Right_hand_image` inputs** — feeding an IMAGE here triggers a hand-only decoder pass that overrides only `hand_pose_params[:54]` (left) / `[54:]` (right). The body's wrist orientation is preserved. No additional outputs.
 
-### Character authoring / rendering
-3. **SAM 3D Body: Setting Chara JSON** — bundles the preset selector + body / bone / blendshape sliders and emits `chara_json` (STRING). Split out from the old render node so character state can be authored once and reused.
-4. **SAM 3D Body: Render Human From Pose And Chara JSON** — takes `pose_json` + `chara_json` as inputs; the only widget-driven controls left are camera (`offset_x/y` / `scale_offset` / `camera_yaw/pitch_deg` / `width` / `height`) and lean correction (`pose_adjust`).
+### Body Preset authoring / rendering
+3. **SAM 3D Body: Setting Body Preset JSON** — bundles the preset selector + body / bone / blendshape sliders and emits `body_preset_json` (STRING). Split out from the old render node so body preset state can be authored once and reused.
+4. **SAM 3D Body: Render Human From Pose And Body Preset JSON** — takes `pose_json` + `body_preset_json` as inputs; the only widget-driven controls left are camera (`offset_x/y` / `scale_offset` / `camera_yaw/pitch_deg` / `width` / `height`) and lean correction (`pose_adjust`).
 
 ### Web-UI editors (in-page browser modals, JA/EN switchable)
 5. **SAM 3D Body: Pose Editor** — click "Open Pose Editor" to launch. Upload an image → segmentation + pose inference → fine-tune bones in the 3D viewport → confirm. The node returns **seven outputs**:
@@ -53,13 +53,14 @@ https://github.com/user-attachments/assets/4fa43a56-8dd2-4ebf-8abe-61a31ff14e6f
    - `pose_image` (IMAGE) — the 3D viewport screenshot. The editor exposes an "Image range" button (drag a red rectangle to crop) and a "Background color" button (color picker, default white), both reflected in this output
    - `input_image` (IMAGE) — the uploaded source image, passed straight through
    - `hand_l_image` / `hand_r_image` (IMAGE) — the per-hand crops you loaded in the editor (mirrored if you used the in-editor flip), useful for inspection or downstream use
-6. **SAM 3D Body: Character Editor** — click "Open Character Editor" to launch. Sculpt the body with sliders + 3D preview; confirm to emit `chara_json` (STRING).
+6. **SAM 3D Body: Pose Editor +** — click "Open Pose Editor +" to launch a **multi-person variant of Pose Editor**. Drop per-person bboxes + heights on a single image, run SAM 2 masking + SAM 3D Body inference for each person, and edit each one's IK pose, body preset, translate / rotate, and per-person FBX / BVH export from inside the editor.
+7. **SAM 3D Body: Body Preset Editor** — click "Open Body Preset Editor" to launch. Sculpt the body with sliders + 3D preview; confirm to emit `body_preset_json` (STRING). The **Download JSON** button at the bottom of the menu lets you save the current slider state as a `body_preset_settings/*.json`-compatible file.
 
 ### FBX / BVH export (all Blender-required)
-7. **SAM 3D Body: Export Rigged FBX** — writes an armature + skinned mesh + posed animation FBX to `<ComfyUI>/output/`.
-8. **SAM 3D Body: Export Animated FBX** — writes an animated FBX baked from a video (IMAGE batch). The character is rigged once at the rest pose, then every frame becomes a keyframe.
-9. **SAM 3D Body: Export Posed BVH** — writes a single-pose humanoid-compatible BVH to `<ComfyUI>/output/`.
-10. **SAM 3D Body: Export Animated BVH** — writes an animated BVH from a video (IMAGE batch) or a supplied pose array.
+8. **SAM 3D Body: Export Rigged FBX** — writes an armature + skinned mesh + posed animation FBX to `<ComfyUI>/output/`.
+9. **SAM 3D Body: Export Animated FBX** — writes an animated FBX baked from a video (IMAGE batch). The character is rigged once at the rest pose, then every frame becomes a keyframe.
+10. **SAM 3D Body: Export Posed BVH** — writes a single-pose humanoid-compatible BVH to `<ComfyUI>/output/`.
+11. **SAM 3D Body: Export Animated BVH** — writes an animated BVH from a video (IMAGE batch) or a supplied pose array.
 
 Based on Meta's **SAM 3D Body** + **Momentum Human Rig (MHR)**; both libraries are vendored under their original licenses. See the [License](#license) section.
 
@@ -165,7 +166,7 @@ Seven ready-made workflows ship under `workflows/`. Load them from ComfyUI's `Wo
 
 | File | What it does | Needs Blender |
 |---|---|---|
-| **`SAM3Dbody_webUI.json`** | **Web-UI editor variant.** Drives `SAM 3D Body: Pose Editor` and `SAM 3D Body: Character Editor` from a fullscreen browser modal and feeds the confirmed JSON straight into the Render node — minimal scaffolding. | ❌ |
+| **`SAM3Dbody_webUI.json`** | **Web-UI editor variant.** Drives `SAM 3D Body: Pose Editor` and `SAM 3D Body: Body Preset Editor` from a fullscreen browser modal and feeds the confirmed JSON straight into the Render node — minimal scaffolding. | ❌ |
 | **`SAM3Dbody_image.json`** | Minimal image-rendering workflow. Takes the pose from your input image and renders it onto an arbitrary body shape. | ❌ |
 | **`SAM3Dbody_FBX.json`** | FBX export workflow. Takes the pose from your input image, applies it to an arbitrary body shape, and exports a rigged FBX with a posed animation track — importable into Unity / Unreal Engine. | ✅ |
 | **`SAM3Dbody_FBXAnimation.json`** | **Video motion-capture workflow.** Pipes a video loaded via `VHS_LoadVideo` into `SAM 3D Body: Export Animated FBX` and writes an animated FBX covering every frame. | ✅ |
@@ -173,7 +174,7 @@ Seven ready-made workflows ship under `workflows/`. Load them from ComfyUI's `Wo
 | **`SAM3Dbody_BVHAnimation.json`** | **Video motion-capture BVH workflow.** Pipes a video loaded via `VHS_LoadVideo` into `SAM 3D Body: Export Animated BVH` and writes an animated BVH covering every frame. No 3D preview node is included. | ✅ |
 | **`SAM3Dbody _QIE_VNCCSpose.json`** | A real-world usage example. Combines [Qwen-Image-Edit-2511](https://huggingface.co/Qwen/Qwen-Image-Edit) + the VNCCSpose LoRA: extract the pose from a reference character of a different body shape, render it onto an arbitrary 3D character body, then image-edit the result. | ❌ |
 
-### How `SAM3Dbody_webUI.json` fits together — confirm pose / character in your browser
+### How `SAM3Dbody_webUI.json` fits together — confirm pose / body preset in your browser
 
 Instead of poking at slider widgets on the ComfyUI canvas, two purpose-built nodes open a **fullscreen modal inside the browser** with a 3D preview, segmentation + pose estimation, and bone editing baked in. The confirmed JSON is stored in the workflow file so re-opening the node never loses your work. The UI has a JA / EN toggle.
 
@@ -181,7 +182,7 @@ Instead of poking at slider widgets on the ComfyUI canvas, two purpose-built nod
 
 ![Pose Editor](docs/sample5.png)
 
-The node carries an **"Open Pose Editor"** button. Click it to upload an image, run segmentation + pose inference, fine-tune bones in the 3D viewport (rotation / IK translate / lean correction), and finally hit **"Confirm & Close / 確定して閉じる"**. The node then emits `pose_json` (STRING) plus the source image's `width` / `height` (INT) so it plugs straight into `SAM 3D Body: Render Human From Pose And Chara JSON`.
+The node carries an **"Open Pose Editor"** button. Click it to upload an image, run segmentation + pose inference, fine-tune bones in the 3D viewport (rotation / IK translate / lean correction), and finally hit **"Confirm & Close / 確定して閉じる"**. The node then emits `pose_json` (STRING) plus the source image's `width` / `height` (INT) so it plugs straight into `SAM 3D Body: Render Human From Pose And Body Preset JSON`.
 
 **Image outputs (IMAGE)**: confirming also returns four IMAGE outputs:
 
@@ -205,11 +206,17 @@ The node carries an **"Open Pose Editor"** button. Click it to upload an image, 
 - When a hand image is provided, "Run pose estimation" feeds it through a hand-only decoder pass and overrides `hand_pose_params[:54]` (left) / `[54:]` (right) on the body's pose. The wrist orientation from the body decoder is preserved.
 - Leave the slots empty for the prior behaviour (full-body inference's hands are kept).
 
-#### `SAM 3D Body: Character Editor` — confirm the body shape in the browser
+#### `SAM 3D Body: Pose Editor +` — multi-person variant
 
-![Character Editor](docs/sample6.png)
+Extends `SAM 3D Body: Pose Editor` to handle multiple characters in a single image. Drop one bbox + height per person, run SAM 2 masking + SAM 3D Body inference for each person, then edit and render every body in the same 3D viewport. The node only exposes a `blender_exe` widget (used by the in-editor per-person FBX / BVH export); every other parameter is confirmed inside the popup.
 
-Likewise the **"Open Character Editor"** button drops you into a modal where the MHR neutral T-pose body responds in real time to **9-axis PCA shape sliders, four bone-length sliders, and the face / body blendshape sliders**. You can also load `presets/<active>/chara_settings_presets/*.json` from this view. On confirm the node outputs `chara_json` (STRING) — feed it directly into the Render node, `SAM 3D Body: Export Rigged FBX`, etc.
+#### `SAM 3D Body: Body Preset Editor` — confirm the body shape in the browser
+
+![Body Preset Editor](docs/sample6.png)
+
+Likewise the **"Open Body Preset Editor"** button drops you into a modal where the MHR neutral T-pose body responds in real time to **9-axis PCA shape sliders, four bone-length sliders, and the face / body blendshape sliders**. You can also load `presets/<active>/body_preset_settings/*.json` from this view. On confirm the node outputs `body_preset_json` (STRING) — feed it directly into the Render node, `SAM 3D Body: Export Rigged FBX`, etc.
+
+The **"Download JSON"** button at the bottom of the sidebar saves the current slider state to a local file in the `body_preset_settings/*.json`-compatible format — handy for sharing presets across workflows or backing them up outside the editor.
 
 ### How `SAM3Dbody _QIE_VNCCSpose.json` fits together
 
@@ -221,13 +228,13 @@ Likewise the **"Open Character Editor"** button drops you into a modal where the
 
 The intended use is treating this plugin's render as an **intermediate artifact fed into an image-editing model** (here Qwen-Image-Edit). It lets you merge two separate inputs — "pose from character A, body type from character B" — via a geometrically correct 3D body in the middle.
 
-## SAM 3D Body: Render Human From Pose And Chara JSON node
+## SAM 3D Body: Render Human From Pose And Body Preset JSON node
 
-Takes `pose_json` + `chara_json` as inputs and renders the 3D body. Character authoring (PCA shape / bone length / blend shapes) is delegated to `chara_json`, so the only widgets left on this node are **camera controls + lean correction**.
+Takes `pose_json` + `body_preset_json` as inputs and renders the 3D body. Body Preset authoring (PCA shape / bone length / blend shapes) is delegated to `body_preset_json`, so the only widgets left on this node are **camera controls + lean correction**.
 
-- Character shape (`shape_params` / `scale_params`) carried inside pose_json is **ignored**.
+- Body shape (`shape_params` / `scale_params`) carried inside pose_json is **ignored**.
 - Only pose-ish fields (`global_rot` / `body_pose_params` / `hand_pose_params` / `expr_params`) are taken from pose_json.
-- Body shape is fully driven by `chara_json` (from the Setting Chara JSON node or the Character Editor).
+- Body shape is fully driven by `body_preset_json` (from the Setting Body Preset JSON node or the Body Preset Editor).
 
 ### Required inputs
 
@@ -235,7 +242,7 @@ Takes `pose_json` + `chara_json` as inputs and renders the 3D body. Character au
 |---|---|---|---|
 | model | — | — | SAM 3D Body model (Load node output) |
 | pose_json | `"{}"` | — | Pose JSON (Process Image to Pose JSON node or Pose Editor output) |
-| chara_json | `"{}"` | — | Character JSON (Setting Chara JSON node or Character Editor output) |
+| body_preset_json | `"{}"` | — | Body Preset JSON (Setting Body Preset JSON node or Body Preset Editor output) |
 | offset_x | 0.0 | −5.0 … 5.0 | Horizontal positional offset (added to `camera[0]` in meters). **Pans the subject left/right within the image** |
 | offset_y | 0.0 | −5.0 … 5.0 | Vertical positional offset (added to `camera[1]`). **Pans the subject up/down within the image** |
 | scale_offset | 1.0 | 0.1 … 5.0 | Camera distance **multiplier**. 1.0 = identity, 0.1 = extreme zoom in, 5.0 = zoom out |
@@ -257,13 +264,13 @@ Takes `pose_json` + `chara_json` as inputs and renders the 3D body. Character au
 |---|---|
 | image | The rendered RGB image |
 
-## SAM 3D Body: Setting Chara JSON node
+## SAM 3D Body: Setting Body Preset JSON node
 
-The **character-authoring half** split out from the legacy Render node. Drives preset selection + 9-axis PCA shape sliders + 4 bone-length sliders + face/body blendshape sliders, and emits `chara_json` (STRING). Plug it directly into the Render node's `chara_json` or any Export node's `character_json`.
+The **body-preset-authoring half** split out from the legacy Render node. Drives preset selection + 9-axis PCA shape sliders + 4 bone-length sliders + face/body blendshape sliders, and emits `body_preset_json` (STRING). Plug it directly into the Render node's `body_preset_json` or any Export node's `body_preset_json`.
 
-- Output JSON is schema-compatible with `chara_settings_presets/*.json`.
+- Output JSON is schema-compatible with `body_preset_settings/*.json`.
 - Picking a preset (autosave / female / male / chibi …) overwrites every slider.
-- **Autosave**: on every execute (when `preset` ≠ `reset`), the current values are written to `chara_settings_presets/autosave.json` and become the next session's slider defaults.
+- **Autosave**: on every execute (when `preset` ≠ `reset`), the current values are written to `body_preset_settings/autosave.json` and become the next session's slider defaults.
 
 ### Inputs
 
@@ -278,7 +285,7 @@ The **character-authoring half** split out from the legacy Render node. Drives p
 
 | Output | Notes |
 |---|---|
-| chara_json | Character settings JSON string. Three blocks: `body_params` / `bone_lengths` / `blendshapes`. Schema-compatible with `chara_settings_presets/*.json` |
+| body_preset_json | Body Preset JSON string. Three blocks: `body_params` / `bone_lengths` / `blendshapes`. Schema-compatible with `body_preset_settings/*.json` |
 
 ### Body Params (PCA body shape) — `body_*`
 
@@ -323,7 +330,7 @@ Implemented in `_apply_bone_length_scales` (`nodes/processing/process.py`). We s
 
 20 sliders blending FBX-derived morph targets from `tools/bone_backup/all_parts_bs.fbx` into the posed mesh. Each slider defaults to **0.0**, range **0.0…1.0**, fully active at 1.0. Combining sliders is additive.
 
-The shape list is auto-discovered from `presets/face_blendshapes.npz` — add a new shape key in Blender, regenerate the npz, and the slider appears in the UI on next reload (no code changes). The `bs_` prefix is a UI-only label; FBX shape-key names and `chara_json` keys use the bare name.
+The shape list is auto-discovered from `presets/face_blendshapes.npz` — add a new shape key in Blender, regenerate the npz, and the slider appears in the UI on next reload (no code changes). The `bs_` prefix is a UI-only label; FBX shape-key names and `body_preset_json` keys use the bare name.
 
 #### Face
 
@@ -381,11 +388,11 @@ The shape list is auto-discovered from `presets/face_blendshapes.npz` — add a 
 
 ### Preset system
 
-Drop a JSON of the slider shape into `chara_settings_presets/<name>.json` and it appears in the `preset` dropdown. Selecting a preset overwrites the slider widgets entirely (missing keys treat as neutral). The shipped `female.json` / `male.json` are reference examples.
+Drop a JSON of the slider shape into `body_preset_settings/<name>.json` and it appears in the `preset` dropdown. Selecting a preset overwrites the slider widgets entirely (missing keys treat as neutral). The shipped `female.json` / `male.json` are reference examples.
 
 ## ⚠ Export Rigged FBX node (Blender required)
 
-Writes a rigged FBX (**armature + skinned mesh + 30-frame static pose animation**) using the same character setup + pose as the Render node, into `<ComfyUI>/output/`. Imports directly into Blender / Unity / Unreal Engine.
+Writes a rigged FBX (**armature + skinned mesh + 30-frame static pose animation**) using the same body preset setup + pose as the Render node, into `<ComfyUI>/output/`. Imports directly into Blender / Unity / Unreal Engine.
 
 > **⚠ Blender 4.1+ is required.** The node spawns `blender.exe --background --python tools/build_rigged_fbx.py` as a subprocess to assemble the armature, bind LBS weights, and export the FBX. Without Blender installed, only this node errors at runtime (the other nodes still work).
 
@@ -394,7 +401,7 @@ Writes a rigged FBX (**armature + skinned mesh + 30-frame static pose animation*
 | Parameter | Notes |
 |---|---|
 | model | Output of `Load SAM 3D Body Model` |
-| **character_json** | **Character settings JSON.** Wire the Render node's `settings_json` output, or paste any `chara_settings_presets/*.json` content (`body_params` / `bone_lengths` / `blendshapes`). The text area starts with `=== CHARACTER JSON ===` so you can tell which slot is which. |
+| **body_preset_json** | **Body Preset JSON.** Wire the Render node's `settings_json` output, or paste any `body_preset_settings/*.json` content (`body_params` / `bone_lengths` / `blendshapes`). The text area starts with `=== BODY PRESET JSON ===` so you can tell which slot is which. |
 | **pose_json** | **Pose JSON.** Wire the `pose_json` output of `SAM 3D Body: Process Image to Pose JSON` (`body_pose_params` / `hand_pose_params` / `global_rot`). The text area starts with `=== POSE JSON ===`. |
 | blender_exe | Path to `blender.exe` (default `C:/Program Files/Blender Foundation/Blender 4.1/blender.exe`). Subprocess invocation requires Blender 4.1+ |
 | output_filename | Output FBX name (default `sam3d_rigged.fbx`). Leave blank for a timestamped name |
@@ -414,7 +421,7 @@ For example output, see the [demo video](#3-export-motion-captured-fbx--bvh-from
 
 ## ⚠ Export Posed BVH node (Blender required)
 
-Writes a single pose to `<ComfyUI>/output/` as a **BVH**. Uses the same character settings from the Render node and pose from `Process Image to Pose JSON`. Output is skeleton / motion only (no mesh), and the bones are first reduced to a humanoid-compatible subset before writing.
+Writes a single pose to `<ComfyUI>/output/` as a **BVH**. Uses the same body preset settings from the Render node and pose from `Process Image to Pose JSON`. Output is skeleton / motion only (no mesh), and the bones are first reduced to a humanoid-compatible subset before writing.
 
 > **⚠ Blender 4.1+ is required.** Calls `blender.exe --background --python tools/build_rigged_bvh.py` as a subprocess internally.
 

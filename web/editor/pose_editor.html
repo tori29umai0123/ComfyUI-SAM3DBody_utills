@@ -21,13 +21,9 @@
   #confirm-hint { color: #aaa; font-size: 12px; margin-left: 6px; }
 
   /* --- Image-range selection UI (overlay on top of #viewport) ----------- */
-  /* Overlay sits BELOW the viewport buttons (z-index 5 vs the buttons'
-     z-index ≥ 6) so the user can still toggle range mode / change the bg
-     color while range select is active. */
   #range-overlay {
     position: absolute; inset: 0; pointer-events: none; z-index: 5;
   }
-  #range-select-btn { z-index: 7; }
   body.range-select-mode #range-overlay { pointer-events: auto; cursor: crosshair; }
   #range-rect {
     position: absolute; border: 2px solid #ff5050;
@@ -37,28 +33,52 @@
   }
   #range-rect[hidden] { display: none; }
 
-  /* While range-select is active, dim the rest of the UI and lock everything
-     except the range button and the background color button. */
+  /* Left-side toolbar — range / reset / background colour. Mirrors the
+     Multi Pose Editor layout so both pages share the same look-and-feel. */
+  .viewport-toolbar-left {
+    position: absolute; top: 8px; left: 8px; z-index: 7;
+    display: flex; gap: 6px; align-items: center;
+  }
+  .viewport-toolbar-left button {
+    padding: 6px 12px; font-size: 12px; cursor: pointer;
+    background: rgba(38, 42, 50, 0.92); color: #cef;
+    border: 1px solid #588; border-radius: 4px;
+    backdrop-filter: blur(2px);
+  }
+  .viewport-toolbar-left button:hover:not(:disabled) { background: rgba(52, 82, 100, 0.9); }
+  .viewport-toolbar-left button:disabled { background: rgba(34, 36, 42, 0.7); color: #667; cursor: not-allowed; }
+
+  /* Range-select active state — red palette to signal the mode change. */
+  body.range-select-mode #range-select-btn {
+    background: rgba(90, 32, 32, 0.85); color: #fcc; border-color: #944;
+  }
+
+  /* Reset button — visible whenever a saved range exists OR while
+     range-select mode is active (mirrors the Pose Editor + behaviour
+     so the user can scrap the saved rect any time). JS toggles the
+     ``hidden`` attribute; the ``[hidden]`` rule below handles the
+     vanish-when-not-applicable case. */
+  #range-reset-btn {
+    background: rgba(60, 32, 32, 0.85); color: #fcc; border-color: #944;
+  }
+  #range-reset-btn:hover:not(:disabled) { background: rgba(110, 50, 50, 0.9); }
+  #range-reset-btn[hidden] { display: none; }
+
+  #bg-color-btn { display: inline-flex; align-items: center; gap: 6px; }
+
+  /* While range-select is active, dim the rest of the UI but keep the
+     left-toolbar buttons live so the user can confirm or reset. */
   body.range-select-mode #sidebar,
   body.range-select-mode .tab-nav,
   body.range-select-mode .lang-picker,
-  body.range-select-mode #confirm-and-close-btn,
-  body.range-select-mode #bg-color-btn {
+  body.range-select-mode #confirm-and-close-btn {
     pointer-events: none; user-select: none; opacity: 0.45;
   }
-  body.range-select-mode #range-select-btn {
-    background: #5a2a2a; color: #fcc; border-color: #944;
+  body.range-select-mode #range-select-btn,
+  body.range-select-mode #range-reset-btn,
+  body.range-select-mode #bg-color-btn {
+    pointer-events: auto; opacity: 1;
   }
-
-  /* "Background color" button: small swatch + label + hidden native input. */
-  #bg-color-btn {
-    position: absolute; top: 50px; left: 12px;
-    display: inline-flex; align-items: center; gap: 8px;
-    padding: 6px 12px; background: rgba(30, 46, 60, 0.85); color: #cef;
-    border: 1px solid #588; border-radius: 4px; font-size: 12px; cursor: pointer;
-    backdrop-filter: blur(2px); z-index: 6;
-  }
-  #bg-color-btn:hover { background: rgba(52, 82, 100, 0.9); }
 
   /* Hand image input row: drop area + 左右反転 button on one line. */
   .hand-input-row {
@@ -84,28 +104,56 @@
     margin: 4px auto 0; border: 1px solid #2a2a2a; border-radius: 3px;
   }
 
-  /* "Range reset" button — only visible while range-select mode is active.
-     Sits to the right of #range-select-btn and is hidden by default; CSS
-     reveals it when ``body.range-select-mode`` is set. */
-  #range-reset-btn {
-    position: absolute; top: 12px; left: 110px; display: none;
-    padding: 6px 12px; background: rgba(60, 32, 32, 0.85); color: #fcc;
-    border: 1px solid #944; border-radius: 4px; font-size: 12px;
-    cursor: pointer; backdrop-filter: blur(2px); z-index: 7;
-  }
-  #range-reset-btn:hover:not(:disabled) { background: rgba(110, 50, 50, 0.9); }
-  #range-reset-btn:disabled { opacity: 0.55; cursor: not-allowed; }
-  body.range-select-mode #range-reset-btn { display: inline-block; }
-  /* Range-select-mode lockout doesn't apply to the reset button — it must
-     stay clickable while the mode is active. */
-  body.range-select-mode #range-reset-btn { pointer-events: auto; opacity: 1; }
   #bg-color-swatch {
-    width: 18px; height: 18px; border-radius: 3px;
+    width: 14px; height: 14px; border-radius: 2px;
     border: 1px solid rgba(255, 255, 255, 0.6); background: #ffffff;
-    flex: 0 0 18px;
+    flex: 0 0 14px;
   }
   #bg-color-input {
     position: absolute; opacity: 0; pointer-events: none; width: 0; height: 0;
+  }
+
+  /* Right-side toolbar — translate / rotate gizmo, reset buttons, input
+     image overlay toggle. Mirrors the Pose Editor + layout. Hidden via
+     JS while pose-edit (IK) mode is active so the body-anchor controls
+     don't conflict with bone manipulation. */
+  .viewport-toolbar {
+    position: absolute; top: 8px; right: 8px; z-index: 7;
+    display: flex; gap: 6px; flex-direction: column;
+  }
+  .viewport-toolbar button {
+    padding: 6px 12px; font-size: 12px; cursor: pointer;
+    background: rgba(38, 42, 50, 0.92); color: #cef;
+    border: 1px solid #588; border-radius: 4px;
+    backdrop-filter: blur(2px);
+  }
+  .viewport-toolbar button:hover:not(:disabled) {
+    background: rgba(52, 82, 100, 0.9);
+  }
+  .viewport-toolbar button:disabled {
+    background: rgba(34, 36, 42, 0.7); color: #667; cursor: not-allowed;
+  }
+  .viewport-toolbar button.active {
+    background: #2d7d46; color: white; border-color: #36994f;
+  }
+
+  /* Input-image overlay (toggleable) — small thumbnail in top-left. */
+  #image-display-overlay {
+    position: absolute; top: 8px; left: 8px; z-index: 3;
+    max-width: 35%; max-height: 35%;
+    border: 1px solid #444; background: #1e1e1e; padding: 4px;
+    display: none;
+  }
+  #image-display-overlay.visible { display: block; }
+  #image-display-overlay img {
+    display: block; max-width: 100%; max-height: 240px;
+  }
+  #image-display-overlay .caption {
+    font-size: 10px; color: #999; margin-top: 2px;
+  }
+
+  body.range-select-mode .viewport-toolbar {
+    pointer-events: none; opacity: 0.45;
   }
 </style>
 <script type="importmap">
@@ -189,7 +237,6 @@
           <input type="range" id="img-lean-range" min="0" max="1" step="0.01" value="0" />
           <input type="number" id="img-lean-num" min="0" max="1" step="0.01" value="0" />
         </label>
-        <p class="muted" data-pose-lock data-i18n="pose.lean_correction_hint">ポーズが前のめりになるとき、後ろに反らせる。リアルタイムで 3D プレビューに反映されます。</p>
         <div class="row">
           <button id="pose-edit-toggle-btn" hidden
                   data-i18n="pose.edit_enter"
@@ -230,20 +277,20 @@
       </section>
     </div>
 
-    <!-- ===== Character panel (preset selection only — no slider editing on pose tab) ===== -->
-    <section id="character-section" data-tab-show="image" hidden>
-      <h2 data-i18n="section.character">Character</h2>
+    <!-- ===== Body Preset panel (preset selection only — no slider editing on pose tab) ===== -->
+    <section id="body-preset-section" data-tab-show="image" hidden>
+      <h2 data-i18n="section.body_preset">Body Preset</h2>
       <div class="row" data-pose-lock>
         <select id="preset-select">
-          <option value="" data-i18n="character.preset_placeholder">(preset)</option>
+          <option value="" data-i18n="body_preset.preset_placeholder">(preset)</option>
         </select>
-        <button id="load-preset-btn" data-i18n="character.load" data-i18n-title="tooltip.pack_switch">Load</button>
+        <button id="load-preset-btn" data-i18n="body_preset.load" data-i18n-title="tooltip.pack_switch">Load</button>
       </div>
-      <label class="file-drop compact" id="char-json-drop" data-pose-lock>
-        <input type="file" id="char-json-input" accept=".json,application/json" />
-        <span id="char-json-label" data-i18n="character.json_drop">キャラクター JSON をアップロード (任意)</span>
+      <label class="file-drop compact" id="body-preset-json-drop" data-pose-lock>
+        <input type="file" id="body-preset-json-input" accept=".json,application/json" />
+        <span id="body-preset-json-label" data-i18n="body_preset.json_drop">ボディプリセット JSON をアップロード (任意)</span>
       </label>
-      <div id="char-source-info" class="muted"></div>
+      <div id="body-preset-source-info" class="muted"></div>
       <div class="row"><span id="render-info" class="muted"></span></div>
     </section>
   </aside>
@@ -251,21 +298,58 @@
   <section id="viewport" data-tab-show="image">
     <canvas id="three-canvas"></canvas>
     <div id="viewport-overlay" class="muted" data-i18n="viewport.initial">画像を読み込んで「ポーズを推定」を押すと 3D メッシュが表示されます</div>
-    <button id="range-select-btn" class="viewport-btn" data-tab-show="image" data-pose-lock
-            disabled data-i18n="viewport.range_enter"
-            data-i18n-title="tooltip.range_select">画像範囲</button>
-    <button id="range-reset-btn" type="button" data-tab-show="image"
-            data-i18n="viewport.range_reset"
-            data-i18n-title="tooltip.range_reset">画像範囲指定reset</button>
-    <button id="bg-color-btn" type="button" data-tab-show="image" data-pose-lock
-            data-i18n-title="tooltip.bg_color">
-      <span id="bg-color-swatch"></span>
-      <span data-i18n="viewport.bg_color">背景色指定</span>
-      <input type="color" id="bg-color-input" value="#ffffff" />
-    </button>
+    <div class="viewport-toolbar-left" data-tab-show="image">
+      <button id="range-select-btn" data-pose-lock disabled
+              data-i18n="viewport.range_enter"
+              data-i18n-title="tooltip.range_select">画像範囲</button>
+      <button id="range-reset-btn" type="button"
+              data-i18n="viewport.range_reset"
+              data-i18n-title="tooltip.range_reset">reset</button>
+      <button id="bg-color-btn" type="button" data-pose-lock
+              data-i18n-title="tooltip.bg_color">
+        <span id="bg-color-swatch"></span>
+        <span data-i18n="viewport.bg_color">背景色</span>
+        <input type="color" id="bg-color-input" value="#ffffff" />
+      </button>
+    </div>
     <div id="range-overlay">
       <div id="range-rect" hidden></div>
     </div>
+
+    <!-- Input-image overlay thumbnail (toggleable from right toolbar). -->
+    <div id="image-display-overlay">
+      <img id="image-display-img" alt="" />
+      <div class="caption" id="image-display-caption">image</div>
+    </div>
+
+    <!-- Right-side toolbar: translate / rotate gizmo + resets + image
+         preview toggle. Hidden during pose-edit (IK) mode. -->
+    <div class="viewport-toolbar" data-tab-show="image">
+      <button id="gizmo-translate-btn" class="active" type="button"
+              data-i18n-title="tooltip.gizmo_translate" title="移動 (W)">
+        <span data-i18n="viewport.gizmo_translate">移動</span>
+      </button>
+      <button id="gizmo-rotate-btn" type="button"
+              data-i18n-title="tooltip.gizmo_rotate" title="回転 (E)">
+        <span data-i18n="viewport.gizmo_rotate">回転</span>
+      </button>
+      <button id="reset-translate-btn" type="button"
+              data-i18n-title="tooltip.reset_translate"
+              title="移動量を 0 に戻す">
+        <span data-i18n="viewport.reset_translate">移動リセット</span>
+      </button>
+      <button id="reset-rotate-btn" type="button"
+              data-i18n-title="tooltip.reset_rotate"
+              title="回転量を 0 に戻す">
+        <span data-i18n="viewport.reset_rotate">回転リセット</span>
+      </button>
+      <button id="toggle-img-btn" type="button"
+              data-i18n-title="tooltip.toggle_image"
+              title="入力画像オーバーレイ">
+        <span data-i18n="viewport.toggle_image">入力画像表示</span>
+      </button>
+    </div>
+
     <!-- Stub: kept for editor_core.js compatibility (id is referenced in
          INFERENCE_LOCK_IDS / various save handlers). Not visible. -->
     <button id="save-render-btn" hidden disabled></button>
