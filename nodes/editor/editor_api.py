@@ -806,13 +806,44 @@ async def _api_plus_export(request: web.Request, *, fmt: str) -> web.Response:
             "trace": traceback.format_exc(limit=8),
         }, status=500)
 
-    return web.json_response({
-        "ok": True,
-        "person_id": person_id,
-        "format": fmt,
-        "output_path": output_path,
-        "output_filename": os.path.basename(output_path),
-    })
+    # Stream the produced file back so the browser triggers a download
+    # dialog. The file also stays on disk under ComfyUI/output/ for
+    # downstream ComfyUI workflows. We read the file into memory and
+    # return it as a raw bytes ``web.Response`` (instead of
+    # ``web.FileResponse``) because the latter auto-sniffs the
+    # Content-Type based on the file extension and adds a charset for
+    # ``.bvh`` (text/plain) — the browser then performs newline /
+    # encoding conversion on the binary FBX or the BVH text, corrupting
+    # the saved file. Forcing ``application/octet-stream`` on the raw
+    # bytes is the simplest way to guarantee byte-for-byte fidelity.
+    filename = os.path.basename(output_path)
+    try:
+        file_bytes = await asyncio.to_thread(_read_file_bytes, output_path)
+    except OSError as exc:
+        return web.json_response({
+            "error": f"export succeeded but the output file could not be read: {exc}",
+            "output_path": output_path,
+        }, status=500)
+    headers = {
+        "Content-Disposition": f'attachment; filename="{filename}"',
+        # Echo the metadata in custom headers so the frontend can update
+        # its status line without parsing the binary body.
+        "X-Sam3d-Output-Filename": filename,
+        "X-Sam3d-Output-Path": output_path,
+    }
+    return web.Response(
+        body=file_bytes,
+        content_type="application/octet-stream",
+        headers=headers,
+    )
+
+
+def _read_file_bytes(path: str) -> bytes:
+    """Read a binary file fully into memory. Wrapped in
+    ``asyncio.to_thread`` by the caller to avoid blocking the event
+    loop on disk I/O for the ~1–10 MB rigged exports."""
+    with open(path, "rb") as f:
+        return f.read()
 
 
 @routes.post("/sam3d/api/plus/export_fbx")

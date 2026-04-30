@@ -3112,13 +3112,13 @@ function _buildPerPersonExportRow(p) {
   fbxBtn.className = "btn";
   fbxBtn.style.padding = "5px 10px";
   fbxBtn.textContent = "FBX をダウンロード";
-  fbxBtn.title = "この人物の rigged FBX を ComfyUI/output/ に書き出す";
+  fbxBtn.title = "この人物の rigged FBX をブラウザにダウンロードする (ComfyUI/output/ にもコピーが残ります)";
 
   const bvhBtn = document.createElement("button");
   bvhBtn.className = "btn";
   bvhBtn.style.padding = "5px 10px";
   bvhBtn.textContent = "BVH をダウンロード";
-  bvhBtn.title = "この人物の rigged BVH を ComfyUI/output/ に書き出す";
+  bvhBtn.title = "この人物の rigged BVH をブラウザにダウンロードする (ComfyUI/output/ にもコピーが残ります)";
 
   row.appendChild(fbxBtn);
   row.appendChild(bvhBtn);
@@ -3168,11 +3168,27 @@ function _buildPerPersonExportRow(p) {
           output_filename: filename,
         }),
       });
-      const j = await r.json().catch(() => ({}));
       if (!r.ok) {
+        // Error path — backend returned JSON, not the binary file.
+        const j = await r.json().catch(() => ({}));
         throw new Error(j.error || `HTTP ${r.status}`);
       }
-      info.textContent = `${label} 出力済み: ${j.output_filename || filename}`;
+      // Success path — backend streamed the produced file. Pull the
+      // bytes into a Blob and synthesise an <a download> click so the
+      // browser pops its native save dialog.
+      const blob = await r.blob();
+      const serverFilename = r.headers.get("X-Sam3d-Output-Filename") || filename;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = serverFilename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      // Revoke after the click handler had a chance to start the
+      // download; small delay covers slow browsers.
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+      info.textContent = `${label} ダウンロード済: ${serverFilename}`;
     } catch (e) {
       console.warn(`[pose_editor_plus] ${fmt} export failed:`, e);
       info.textContent = `${label} 出力に失敗: ${e.message || e}`;

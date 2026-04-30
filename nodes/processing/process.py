@@ -1009,13 +1009,56 @@ def _apply_bone_length_scales(vertices: np.ndarray,
     return (vertices + posed_shift).astype(vertices.dtype)
 
 
-def _load_sam3d_model(model_config: dict):
+def _resolve_default_model_paths():
+    """Fallback paths for cases where the upstream node's config dict is
+    missing keys (e.g. a stale cached SAM3D_MODEL value piped across
+    workers). Mirrors ``LoadSAM3DBodyModel.load_model`` so all consumers
+    can still find ``model.ckpt`` / ``mhr_model.pt`` under the standard
+    ``<ComfyUI>/models/sam3dbody/`` layout."""
+    import folder_paths
+    model_path = os.path.join(folder_paths.models_dir, "sam3dbody")
+    return {
+        "model_path": model_path,
+        "ckpt_path":  os.path.join(model_path, "model.ckpt"),
+        "mhr_path":   os.path.join(model_path, "assets", "mhr_model.pt"),
+    }
+
+
+def _load_sam3d_model(model_config):
     """
     Load SAM 3D Body model from config paths.
 
     Uses module-level caching to avoid reloading on every call.
     This runs inside the isolated worker subprocess.
+
+    Defensive: when ``model_config`` is missing required keys (legacy
+    cached SAM3D_MODEL values, partial dicts that survived a worker
+    crash) the loader falls back to the standard
+    ``<ComfyUI>/models/sam3dbody/`` paths and resolves the device the
+    same way ``LoadSAM3DBodyModel`` does. The user's only requirement
+    is that the model files actually exist on disk.
     """
+    if not isinstance(model_config, dict):
+        print(
+            f"[SAM3DBody] _load_sam3d_model: model_config is not a dict "
+            f"(got {type(model_config).__name__}); falling back to default "
+            f"paths."
+        )
+        model_config = {}
+
+    if "ckpt_path" not in model_config:
+        defaults = _resolve_default_model_paths()
+        print(
+            f"[SAM3DBody] _load_sam3d_model: model dict is missing "
+            f"'ckpt_path'; falling back to {defaults['ckpt_path']}. "
+            f"Provided keys: {sorted(model_config.keys())}"
+        )
+        model_config = {**defaults, **model_config}
+
+    if "device" not in model_config:
+        import torch
+        model_config["device"] = "cuda" if torch.cuda.is_available() else "cpu"
+
     cache_key = model_config["ckpt_path"]
 
     if cache_key in _MODEL_CACHE:
