@@ -758,6 +758,12 @@ const viewer = (() => {
   // The owner registers a callback to receive transform-change ticks.
   let _onTransformChanged = null;
   function setOnTransformChanged(cb) { _onTransformChanged = cb; }
+  // Notification when the body-anchor gizmo (translate/rotate, OUTSIDE
+  // pose-edit) starts / ends a drag. Lets the editor capture begin/commit
+  // boundaries for undo. Pose-edit IK drags are routed via poseEdit.onDragStart
+  // / poseEdit.onDragEnd instead.
+  let _onTransformDragChange = null;
+  function setOnTransformDragChange(cb) { _onTransformDragChange = cb; }
 
   function resize() {
     const w = canvasEl.clientWidth;
@@ -1413,6 +1419,16 @@ const viewer = (() => {
 
   // Click-to-select handler — raycasts against bone handles, swaps the
   // selected material, attaches the gizmo to ``_ikTarget``.
+  //
+  // Registered in CAPTURE phase so it runs before TransformControls'
+  // bubble-phase pointerdown. If the click hits a bone handle we
+  // ``stopImmediatePropagation`` to keep TC from starting a gizmo drag —
+  // otherwise picking an IK sphere that visually overlaps the active
+  // bone's gizmo would either silently fail (TC grabs the click first)
+  // or worse, switch the selection AND immediately start dragging the
+  // newly-selected bone. We guard mid-drag (``tcontrols.dragging``) so
+  // an in-progress gizmo drag isn't hijacked by accidentally hovering
+  // over another sphere.
   const _ikRay = new THREE.Raycaster();
   const _ikRayMouse = new THREE.Vector2();
   canvasEl.addEventListener("pointerdown", (ev) => {
@@ -1429,14 +1445,18 @@ const viewer = (() => {
     const bone = poseEdit.bones.find((b) => b.handle === hit);
     if (!bone) return;
     ev.preventDefault();
-    ev.stopPropagation();
+    ev.stopImmediatePropagation();
     selectPoseBone(bone.name);
     if (poseEdit.onBonePick) poseEdit.onBonePick(bone.name);
-  });
+  }, true);
 
   tcontrols.addEventListener("dragging-changed", (ev) => {
     controls.enabled = !ev.value;
-    if (!poseEdit.active) return;
+    if (!poseEdit.active) {
+      // Body-anchor gizmo drag — relay to the editor for undo bookkeeping.
+      if (_onTransformDragChange) _onTransformDragChange(ev.value);
+      return;
+    }
     if (ev.value) {
       if (poseEdit.selected) {
         if (poseEdit.selected.name === _HIPS_BONE_NAME) {
@@ -1787,6 +1807,7 @@ const viewer = (() => {
     readActiveTransform,
     writeAnchorTransform,
     setOnTransformChanged,
+    setOnTransformDragChange,
     getAnchorCount,
     showCanvas: (yes) => { canvasEl.style.display = yes ? "block" : "none"; },
   };
@@ -1885,6 +1906,7 @@ function _resetActiveTransform(component /* "translate" | "rotate" */) {
   if (!state.activeId) return;
   const p = state.persons.find((q) => q.id === state.activeId);
   if (!p?.transform) return;
+  _beginPoseOpPlus();
   if (component === "translate") {
     p.transform.translate = [0, 0, 0];
   } else {
@@ -1894,6 +1916,7 @@ function _resetActiveTransform(component /* "translate" | "rotate" */) {
     viewer.writeAnchorTransform(p.id, p.transform.translate, p.transform.rotate_deg);
   }
   rebuildPersonList();
+  _commitPoseOpPlus();
 }
 resetTranslateBtn.addEventListener("click", () => _resetActiveTransform("translate"));
 resetRotateBtn.addEventListener("click",    () => _resetActiveTransform("rotate"));
@@ -1979,7 +2002,11 @@ viewer.setPoseEditCallbacks({
     }
     triggerReRender();
   },
-  onDragStart: () => { /* hook for undo/redo if added later */ },
+  onDragStart: () => {
+    // Snapshot the pre-drag state so the whole IK / Hips D&D becomes a
+    // single undo entry on release.
+    _beginPoseOpPlus();
+  },
   onDragEnd:   () => {
     // One final render after release in case the last drag event was
     // coalesced into an in-flight render and its follow-up was skipped.
@@ -1989,6 +2016,7 @@ viewer.setPoseEditCallbacks({
     // bones land exactly on the mesh's posed joint positions.
     _poseRebuildAfterRender = true;
     triggerReRender();
+    _commitPoseOpPlus();
   },
   // Hips translate — the gizmo delta has already been applied to the
   // active person's anchor by the viewer; we just need to mirror it
@@ -2027,10 +2055,20 @@ function setIkMode(on) {
     if (p.selectedBoneName) {
       viewer.selectPoseBone(p.selectedBoneName);
     }
+    // Snapshot the active person's pose state as THIS IK session's reset
+    // baseline. Mirrors the single Pose Editor: "Reset all bones" /
+    // "Reset bone" restore to the pose the user had when they entered IK
+    // — so exiting and re-entering makes the just-saved pose the new
+    // reset target, instead of always reverting to the inference output.
+    _capturePoseBaseline(p);
     gizmoTranslateBtn.classList.remove("active");
     gizmoRotateBtn.classList.remove("active");
   } else {
     viewer.exitPoseEdit();
+    // Drop every person's baseline. The next IK entry will re-capture
+    // against whatever the current pose is at that moment, so the user's
+    // most recent edits become the new reset target.
+    for (const p of state.persons) p._poseBaseline = null;
     gizmoTranslateBtn.classList.toggle("active", _gizmoMode === "translate");
     gizmoRotateBtn.classList.toggle("active",    _gizmoMode === "rotate");
     if (state.activeId) viewer.setActiveAnchor(state.activeId);
@@ -2038,6 +2076,24 @@ function setIkMode(on) {
   }
   rebuildPersonList();
   _refreshViewportToolbar();
+}
+
+// Deep-copy the person's current ``pose_adjust.rotation_overrides`` +
+// ``transform`` into ``p._poseBaseline``. Called once per person at the
+// moment they enter IK editing context (setIkMode(true) for the active
+// person, or refreshPoseEditForActive when active switches mid-session).
+function _capturePoseBaseline(p) {
+  if (!p) return;
+  const overrides = p.settings?.pose_adjust?.rotation_overrides || {};
+  p._poseBaseline = {
+    rotationOverrides: Object.fromEntries(
+      Object.entries(overrides).map(([k, v]) => [k, [v[0], v[1], v[2]]]),
+    ),
+    transform: {
+      translate:  [...(p.transform?.translate  || [0, 0, 0])],
+      rotate_deg: [...(p.transform?.rotate_deg || [0, 0, 0])],
+    },
+  };
 }
 
 // Rebuild the pose-edit overlay against a different person — used when
@@ -2053,6 +2109,10 @@ function refreshPoseEditForActive() {
   const stored = p.settings?.pose_adjust?.rotation_overrides || {};
   viewer.enterPoseEdit(p.skeleton, stored, p.id);
   if (p.selectedBoneName) viewer.selectPoseBone(p.selectedBoneName);
+  // Mid-session active switch — capture a baseline for the new active
+  // person if they don't already have one. (If the user re-activates
+  // someone who already had a baseline this session, keep theirs intact.)
+  if (!p._poseBaseline) _capturePoseBaseline(p);
 }
 
 // Live sync of gizmo edits back to per-person state + sidebar sliders.
@@ -2084,6 +2144,211 @@ viewer.setOnTransformChanged(() => {
     }
   }
 });
+
+// ---------------------------------------------------------------------------
+// Undo / Redo — one entry per editing operation. Each entry snapshots
+// every person's transform + pose_adjust.rotation_overrides, so sliders,
+// gizmo drags, IK / Hips drags, and reset buttons all share one stack.
+// Mirrors the single Pose Editor's undo wiring (``editor_core.js``
+// ``initPoseEditUi``) but the snapshot covers every person rather than
+// just the active one — undo restores the whole scene to its prior
+// committed state.
+// ---------------------------------------------------------------------------
+
+const _UNDO_MAX_PLUS = 50;
+const _undoStackPlus = [];
+const _redoStackPlus = [];
+let _pendingUndoSnapPlus = null;     // captured at op start, pushed at op end
+
+function _snapshotPersonsState() {
+  return {
+    persons: state.persons.map((p) => ({
+      id: p.id,
+      translate:  [...(p.transform?.translate  || [0, 0, 0])],
+      rotate_deg: [...(p.transform?.rotate_deg || [0, 0, 0])],
+      rotationOverrides: Object.fromEntries(
+        Object.entries(p.settings?.pose_adjust?.rotation_overrides || {})
+          .map(([k, v]) => [k, [Number(v[0]), Number(v[1]), Number(v[2])]]),
+      ),
+    })),
+    activeId: state.activeId,
+    selectedBoneByPerson: Object.fromEntries(
+      state.persons.map((p) => [p.id, p.selectedBoneName || null]),
+    ),
+  };
+}
+
+function _applyPersonsState(snap) {
+  for (const ps of snap.persons) {
+    const p = state.persons.find((q) => q.id === ps.id);
+    if (!p) continue;
+    p.transform = {
+      translate:  [...ps.translate],
+      rotate_deg: [...ps.rotate_deg],
+    };
+    if (!p.settings) p.settings = _emptySettings();
+    if (!p.settings.pose_adjust) {
+      p.settings.pose_adjust = { lean_correction: 0, rotation_overrides: {} };
+    }
+    p.settings.pose_adjust.rotation_overrides = Object.fromEntries(
+      Object.entries(ps.rotationOverrides).map(
+        ([k, v]) => [k, [v[0], v[1], v[2]]],
+      ),
+    );
+    if (viewer.getAnchorCount() > 0) {
+      viewer.writeAnchorTransform(p.id, p.transform.translate, p.transform.rotate_deg);
+    }
+  }
+  if (snap.selectedBoneByPerson) {
+    for (const p of state.persons) {
+      const sel = snap.selectedBoneByPerson[p.id];
+      if (sel !== undefined) p.selectedBoneName = sel;
+    }
+  }
+  if (snap.activeId && snap.activeId !== state.activeId) {
+    state.activeId = snap.activeId;
+    if (viewer.getAnchorCount() > 0) {
+      if (_ikMode) refreshPoseEditForActive();
+      else         viewer.setActiveAnchor(snap.activeId);
+    }
+  }
+  if (_ikMode && viewer.isPoseEditActive()) {
+    _rebuildPoseOverlayFromCurrent();
+  }
+  rebuildPersonList();
+  triggerReRender();
+}
+
+function _refreshUndoButtonsPlus() {
+  // Buttons are re-built per person inside ``_buildPoseEditPanel``; query
+  // by class so every visible instance reflects the current stack.
+  const undoDisabled = _undoStackPlus.length === 0;
+  const redoDisabled = _redoStackPlus.length === 0;
+  document.querySelectorAll(".pose-undo-btn-plus").forEach((b) => { b.disabled = undoDisabled; });
+  document.querySelectorAll(".pose-redo-btn-plus").forEach((b) => { b.disabled = redoDisabled; });
+}
+
+function _pushUndoEntryPlus(snap) {
+  _undoStackPlus.push(snap);
+  if (_undoStackPlus.length > _UNDO_MAX_PLUS) _undoStackPlus.shift();
+  _redoStackPlus.length = 0;
+  _refreshUndoButtonsPlus();
+}
+
+// Capture the current state — call at the START of an op. If a pending
+// snapshot already exists (nested begin, or an orphaned begin from a
+// drag that never sent its release event), we KEEP the older one — it
+// represents the true pre-edit state that should be restored on undo.
+function _beginPoseOpPlus() {
+  if (_pendingUndoSnapPlus === null) {
+    _pendingUndoSnapPlus = _snapshotPersonsState();
+  }
+}
+
+// Commit the captured snapshot to the undo stack — call at op END.
+// Pushes once per outstanding pending snap, then clears it.
+function _commitPoseOpPlus() {
+  if (_pendingUndoSnapPlus) {
+    _pushUndoEntryPlus(_pendingUndoSnapPlus);
+    _pendingUndoSnapPlus = null;
+  }
+}
+
+function _undoEditPlus() {
+  if (_undoStackPlus.length === 0) return;
+  _redoStackPlus.push(_snapshotPersonsState());
+  const snap = _undoStackPlus.pop();
+  _applyPersonsState(snap);
+  _refreshUndoButtonsPlus();
+}
+function _redoEditPlus() {
+  if (_redoStackPlus.length === 0) return;
+  _undoStackPlus.push(_snapshotPersonsState());
+  const snap = _redoStackPlus.pop();
+  _applyPersonsState(snap);
+  _refreshUndoButtonsPlus();
+}
+
+function _resetUndoHistoryPlus() {
+  _undoStackPlus.length = 0;
+  _redoStackPlus.length = 0;
+  _pendingUndoSnapPlus = null;
+  _refreshUndoButtonsPlus();
+}
+
+// Helper for slider inputs: bind pointerdown/focus to begin and
+// pointerup/blur/change to commit. The per-slider ``active`` flag
+// prevents repeated input events from double-snapshotting; the global
+// ``_pendingUndoSnapPlus`` keeps the OLDEST pre-edit state if multiple
+// sliders end up bracketed inside one another.
+function _wireSliderUndo(rng, num) {
+  let active = false;
+  const begin = () => {
+    if (active) return;
+    active = true;
+    _beginPoseOpPlus();
+  };
+  const commit = () => {
+    if (!active) return;
+    active = false;
+    _commitPoseOpPlus();
+  };
+  if (rng) {
+    rng.addEventListener("pointerdown", begin);
+    rng.addEventListener("pointerup",   commit);
+    rng.addEventListener("keydown", (ev) => {
+      // Arrow / page keys nudge the value — treat each keystroke as its
+      // own undo entry: begin on keydown, commit on the matching keyup.
+      if (ev.key.startsWith("Arrow") || ev.key === "PageUp" || ev.key === "PageDown") {
+        begin();
+      }
+    });
+    rng.addEventListener("keyup", commit);
+    rng.addEventListener("blur",   commit);
+    rng.addEventListener("change", commit);
+  }
+  if (num) {
+    num.addEventListener("focus",  begin);
+    num.addEventListener("change", commit);
+    num.addEventListener("blur",   commit);
+  }
+}
+
+// Keyboard shortcuts — Ctrl+Z / Ctrl+Y (or Ctrl+Shift+Z). Mirrors the
+// single Pose Editor: only active while in IK / pose-edit mode so we
+// don't hijack the browser's native undo elsewhere on the page.
+// Text-bearing inputs always get a pass.
+window.addEventListener("keydown", (ev) => {
+  if (!_ikMode) return;
+  const tag = ev.target?.tagName;
+  const type = (ev.target?.type || "").toLowerCase();
+  const isText = (tag === "INPUT" && (type === "text" || type === "search" ||
+                                       type === "url"  || type === "email" ||
+                                       type === "password")) || tag === "TEXTAREA";
+  if (isText) return;
+  if (!ev.ctrlKey && !ev.metaKey) return;
+  const k = ev.key.toLowerCase();
+  if (k === "z" && !ev.shiftKey) {
+    ev.preventDefault();
+    _undoEditPlus();
+  } else if (k === "y" || (k === "z" && ev.shiftKey)) {
+    ev.preventDefault();
+    _redoEditPlus();
+  }
+});
+
+// Body-anchor gizmo (translate / rotate, OUTSIDE pose-edit) — bracket
+// the drag so the whole pointer-down → pointer-up motion becomes one
+// undo entry. Pose-edit IK / Hips drags use the ``onDragStart`` /
+// ``onDragEnd`` callbacks above instead.
+viewer.setOnTransformDragChange((dragging) => {
+  if (dragging) _beginPoseOpPlus();
+  else          _commitPoseOpPlus();
+});
+
+// Expose for callers that need to invalidate history (image upload,
+// fresh inference, person add / remove).
+window.__resetPoseUndoHistoryPlus = _resetUndoHistoryPlus;
 
 // ---------------------------------------------------------------------------
 // Bbox overlay — image-space ↔ overlay-pixel mapping
@@ -3284,6 +3549,7 @@ function _buildTransformPanel(p) {
     };
     rng.addEventListener("input", () => commit(rng.value));
     num.addEventListener("input", () => commit(num.value));
+    _wireSliderUndo(rng, num);
     row.appendChild(lbl); row.appendChild(rng); row.appendChild(num);
     if (group === "translate") refs.translate[axis] = { range: rng, num };
     else                       refs.rotate[axis]    = { range: rng, num };
@@ -3316,9 +3582,11 @@ function _buildTransformPanel(p) {
   resetBtn.style.padding = "3px 8px";
   resetBtn.textContent = "位置/回転をリセット";
   resetBtn.addEventListener("click", () => {
+    _beginPoseOpPlus();
     p.transform = { translate: [0, 0, 0], rotate_deg: [0, 0, 0] };
     viewer.writeAnchorTransform(p.id, p.transform.translate, p.transform.rotate_deg);
     rebuildPersonList();
+    _commitPoseOpPlus();
   });
   resetRow.appendChild(resetBtn);
   panel.appendChild(resetRow);
@@ -3442,6 +3710,7 @@ function _buildPoseEditPanel(p) {
       ranges[i].value = nums[i].value;
       commit();
     });
+    _wireSliderUndo(ranges[i], nums[i]);
   }
   boneSelect.addEventListener("change", () => {
     p.selectedBoneName = boneSelect.value;
@@ -3452,6 +3721,26 @@ function _buildPoseEditPanel(p) {
   });
   syncSliders();
 
+  // Undo / Redo — same place + same styling as the single Pose Editor:
+  // a flex row inside the bone-edit panel, directly above the reset row.
+  const undoRow = document.createElement("div");
+  undoRow.className = "row";
+  const undoBtn = document.createElement("button");
+  undoBtn.type = "button";
+  undoBtn.className = "pose-undo-btn-plus";
+  undoBtn.textContent = "元に戻す (Ctrl+Z)";
+  undoBtn.disabled = _undoStackPlus.length === 0;
+  undoBtn.addEventListener("click", () => _undoEditPlus());
+  const redoBtn = document.createElement("button");
+  redoBtn.type = "button";
+  redoBtn.className = "pose-redo-btn-plus";
+  redoBtn.textContent = "やり直す (Ctrl+Y)";
+  redoBtn.disabled = _redoStackPlus.length === 0;
+  redoBtn.addEventListener("click", () => _redoEditPlus());
+  undoRow.appendChild(undoBtn);
+  undoRow.appendChild(redoBtn);
+  panel.appendChild(undoRow);
+
   // Reset buttons
   const resetRow = document.createElement("div");
   resetRow.className = "row";
@@ -3460,26 +3749,76 @@ function _buildPoseEditPanel(p) {
   resetBoneBtn.style.padding = "3px 8px";
   resetBoneBtn.textContent = "このボーンをリセット";
   resetBoneBtn.addEventListener("click", () => {
-    _writeEulerForBone(boneSelect.value, [0, 0, 0]);
-    if (_ikMode && viewer.isPoseEditActive()) {
-      viewer.resetPoseBone(boneSelect.value);
+    _beginPoseOpPlus();
+    // Restore THIS bone to its IK-session baseline value (or identity if
+    // the bone wasn't set at session start). Mirrors the single Pose
+    // Editor: edits made in earlier IK sessions persist; only the
+    // current session's edits to this bone are reverted.
+    const bone = p.skeleton.bones.find((b) => b.name === boneSelect.value);
+    const baselineEulerRad = bone && p._poseBaseline
+      ? p._poseBaseline.rotationOverrides[String(bone.joint_id)]
+      : null;
+    if (baselineEulerRad) {
+      const baselineEulerDeg = baselineEulerRad.map((v) => v * 180 / Math.PI);
+      _writeEulerForBone(boneSelect.value, baselineEulerDeg);
+      if (_ikMode && viewer.isPoseEditActive()) {
+        viewer.setPoseBoneLocalEuler(
+          boneSelect.value,
+          baselineEulerRad[0], baselineEulerRad[1], baselineEulerRad[2],
+        );
+      }
+    } else {
+      _writeEulerForBone(boneSelect.value, [0, 0, 0]);
+      if (_ikMode && viewer.isPoseEditActive()) {
+        viewer.resetPoseBone(boneSelect.value);
+      }
     }
     syncSliders();
     triggerReRender();
+    _commitPoseOpPlus();
   });
   const resetAllBtn = document.createElement("button");
   resetAllBtn.className = "btn btn-danger";
   resetAllBtn.style.padding = "3px 8px";
   resetAllBtn.textContent = "全ボーンをリセット";
   resetAllBtn.addEventListener("click", () => {
+    _beginPoseOpPlus();
     if (!p.settings) p.settings = _emptySettings();
     p.settings.pose_adjust = p.settings.pose_adjust || {};
-    p.settings.pose_adjust.rotation_overrides = {};
-    if (_ikMode && viewer.isPoseEditActive()) {
-      viewer.resetAllPoseBones();
+    if (p._poseBaseline) {
+      // Restore every override + the body transform back to the IK
+      // session's entry pose. Re-entering IK after this leaves the
+      // baseline frozen until the user exits IK again.
+      p.settings.pose_adjust.rotation_overrides = Object.fromEntries(
+        Object.entries(p._poseBaseline.rotationOverrides).map(
+          ([k, v]) => [k, [v[0], v[1], v[2]]],
+        ),
+      );
+      p.transform = {
+        translate:  [...p._poseBaseline.transform.translate],
+        rotate_deg: [...p._poseBaseline.transform.rotate_deg],
+      };
+      if (viewer.getAnchorCount() > 0) {
+        viewer.writeAnchorTransform(p.id, p.transform.translate, p.transform.rotate_deg);
+      }
+      // Rebuild the IK overlay so the bone handles snap to the restored
+      // pose; ``viewer.resetAllPoseBones`` would zero everything out and
+      // visibly diverge from the (non-zero) baseline.
+      if (_ikMode && viewer.isPoseEditActive()) {
+        _rebuildPoseOverlayFromCurrent();
+      }
+    } else {
+      // No baseline (e.g. reset pressed via undo replay before IK was
+      // ever entered). Fall back to a full clear, matching the prior
+      // behaviour.
+      p.settings.pose_adjust.rotation_overrides = {};
+      if (_ikMode && viewer.isPoseEditActive()) {
+        viewer.resetAllPoseBones();
+      }
     }
     syncSliders();
     triggerReRender();
+    _commitPoseOpPlus();
   });
   resetRow.appendChild(resetBoneBtn);
   resetRow.appendChild(resetAllBtn);
@@ -3600,6 +3939,9 @@ function removePerson(id) {
   // ``_personCounter`` is reset to the live length.
   state.persons.forEach((p, i) => { p.id = `p${i}`; });
   _personCounter = state.persons.length;
+  // Renumbering invalidates every snapshot (which keys by id) — wipe
+  // history so undo can't apply transforms to the wrong person.
+  if (window.__resetPoseUndoHistoryPlus) window.__resetPoseUndoHistoryPlus();
 
   // Rebind active id against the renumbered array.
   if (activeIdxAfter >= 0 && activeIdxAfter < state.persons.length) {
@@ -3733,6 +4075,9 @@ async function setInputImage(file) {
     viewer.resetCohortLayoutCache();
     viewer.resetFramedFingerprint();
     overlayEl.hidden = false;
+    // The new image's persons / skeletons render the existing undo
+    // history meaningless — wipe it so old snapshots can't be applied.
+    if (window.__resetPoseUndoHistoryPlus) window.__resetPoseUndoHistoryPlus();
     rebuildPersonList();
     rebuildBboxOverlay();
     rebuildObjectList();
@@ -3952,6 +4297,12 @@ runBtn.addEventListener("click", async () => {
     setView("3d");
     setStatus("推論完了");
     rebuildPersonList();
+    // Fresh inference resets every transform + (re)provides a skeleton
+    // whose joint_ids may differ from any prior pose-edit session — the
+    // existing undo history + IK reset baselines reference stale state.
+    // Drop both.
+    if (window.__resetPoseUndoHistoryPlus) window.__resetPoseUndoHistoryPlus();
+    for (const slot of state.persons) slot._poseBaseline = null;
   } catch (e) {
     console.error("multi_process failed:", e);
     runInfoEl.textContent = "推論失敗: " + e.message;

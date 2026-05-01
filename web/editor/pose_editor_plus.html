@@ -387,6 +387,20 @@ body.bbox-draw-mode #bbox-overlay .delete-btn {
 .viewport-toolbar-left button:disabled {
   background: rgba(34, 36, 42, 0.7); color: #667; cursor: not-allowed;
 }
+
+/* Undo / Redo — placed inline inside the per-person bone-edit panel,
+   matching the single Pose Editor's pose-edit-panel button styling
+   exactly so the two editors share a visual language. */
+.pose-undo-btn-plus, .pose-redo-btn-plus {
+  flex: 1; padding: 5px 8px; font-size: 11px;
+  background: #2a3036; color: #cef; border: 1px solid #445;
+  border-radius: 3px; cursor: pointer;
+}
+.pose-undo-btn-plus:hover:not(:disabled),
+.pose-redo-btn-plus:hover:not(:disabled) { background: #344; }
+.pose-undo-btn-plus:disabled, .pose-redo-btn-plus:disabled {
+  cursor: not-allowed; opacity: 0.55;
+}
 /* "Currently selected" state for toggleable right-toolbar buttons
    (translate / rotate gizmo, image preview overlay). */
 .viewport-toolbar button.active {
@@ -555,6 +569,6 @@ body.range-select-mode #bg-color-btn-plus {
   </section>
 </main>
 
-<script type="module" src="/extensions/ComfyUI-SAM3DBody_utills/editor/static/pose_editor_plus.js?v=5"></script>
+<script type="module" src="/extensions/ComfyUI-SAM3DBody_utills/editor/static/pose_editor_plus.js?v=10"></script>
 </body>
 </html>

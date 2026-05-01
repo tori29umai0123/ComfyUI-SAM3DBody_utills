@@ -729,11 +729,19 @@ function initViewer() {
   // ---- raycaster-driven bone picking on click ----
   // Click a sphere to select. Translate gizmo (TransformControls) appears
   // on the selected bone; dragging it runs CCD IK on the parent chain.
+  //
+  // Registered in CAPTURE phase so it runs before TransformControls'
+  // bubble-phase pointerdown. If the click hits a bone handle we
+  // ``stopImmediatePropagation`` to keep TC from starting a gizmo drag —
+  // otherwise picking an IK sphere that visually overlaps the active
+  // bone's gizmo would either silently fail (TC grabs the click first)
+  // or switch selection and immediately start dragging the new bone.
+  // Mid-drag (``tControls.dragging``) we still bail so an in-progress
+  // gizmo drag isn't hijacked.
   const _ray = new THREE.Raycaster();
   const _rayMouse = new THREE.Vector2();
   canvas.addEventListener("pointerdown", (ev) => {
     if (!poseEdit.active || ev.button !== 0) return;
-    // Don't intercept clicks on the gizmo itself.
     if (tControls.dragging) return;
     const r = canvas.getBoundingClientRect();
     _rayMouse.x = ((ev.clientX - r.left) / r.width) * 2 - 1;
@@ -746,9 +754,10 @@ function initViewer() {
     const bone = poseEdit.bones.find((b) => b.handle === hit);
     if (!bone) return;
     ev.preventDefault();
+    ev.stopImmediatePropagation();
     selectPoseBone(bone.name);
     if (poseEdit.onBonePick) poseEdit.onBonePick(bone.name);
-  });
+  }, true);
 
   function _quatMul(q1, q2) {
     // three.js Quaternion.multiply: this = this * q  (left-to-right).
